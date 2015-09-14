@@ -9,7 +9,7 @@ module Rails.Decode (errors) where
 
 import Json.Decode as Decode exposing (Decoder, (:=))
 import Result exposing (Result)
-import Dict
+import Dict exposing (Dict)
 
 
 -- Decoding
@@ -39,17 +39,16 @@ railsErrorsDecoder =
 ```
 
 -}
+
+errors : Dict String field -> Decoder (List (field, String))
 errors mappings =
     let
-        errorsDecoder : Decoder (List (String, List String))
         errorsDecoder =
             Decode.keyValuePairs (Decode.list Decode.string)
 
-        finalDecoder : Decoder (List (field, String))
         finalDecoder =
             Decode.customDecoder errorsDecoder (toFinalDecoder [])
 
-        fieldDecoderFor : String -> Decoder field
         fieldDecoderFor fieldName =
             Dict.get fieldName mappings
                 |> Maybe.map Decode.succeed
@@ -64,7 +63,6 @@ errors mappings =
 
                 (fieldName, errors) :: others ->
                     let
-                        newResults : Result String (List (field, String))
                         newResults =
                             Decode.decodeString (fieldDecoderFor fieldName) ("\"" ++ fieldName ++ "\"")
                                 |> Result.map (tuplesFromField errors results)
@@ -77,7 +75,6 @@ errors mappings =
                             Ok newResultList ->
                                 toFinalDecoder newResultList others
 
-        tuplesFromField : List String -> List (field, String) -> field -> List (field, String)
         tuplesFromField errors results field =
             errors
                 |> List.map (\error -> (field, error))
