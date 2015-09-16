@@ -9,7 +9,7 @@ module Rails.Decode (errors) where
 
 import Json.Decode as Decode exposing (Decoder, (:=))
 import Result exposing (Result)
-import Dict
+import Dict exposing (Dict)
 
 
 -- Decoding
@@ -32,7 +32,12 @@ Dict.fromList
     ]
 
 -}
-errors mappings =
+errors : Dict String field -> Decoder (List ( field, String ))
+errors =
+    errorsWithDefault failOnUnrecognized
+
+
+errorsWithDefault default mappings =
     let
         errorsDecoder : Decoder (List (String, List String))
         errorsDecoder =
@@ -46,7 +51,7 @@ errors mappings =
         fieldDecoderFor fieldName =
             Dict.get fieldName mappings
                 |> Maybe.map Decode.succeed
-                |> Maybe.withDefault (Decode.fail ("Unrecognized Field: " ++ fieldName))
+                |> Maybe.withDefault (default fieldName)
 
 
         -- toFinalDecoder : List (field, String) -> List (String, (List String)) -> Result String (List (field, String))
@@ -78,3 +83,8 @@ errors mappings =
 
     in
         "errors" := finalDecoder
+
+
+failOnUnrecognized fieldName =
+    Decode.fail ("Unrecognized Field: " ++ fieldName)
+
