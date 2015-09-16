@@ -1,9 +1,9 @@
-module Rails.Decode (errors) where
+module Rails.Decode (errors, errorsWithDefault) where
 
 {-|
 
 # Decoding
-@docs errors
+@docs errors errorsWithDefault
 
 -}
 
@@ -36,7 +36,8 @@ errors : Dict String field -> Decoder (List ( field, String ))
 errors =
     errorsWithDefault failOnUnrecognized
 
-
+{-| Like
+-}
 errorsWithDefault default mappings =
     let
         errorsDecoder : Decoder (List (String, List String))
