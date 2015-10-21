@@ -55,7 +55,7 @@ errors mappings =
         errorsDecoder =
             Decode.keyValuePairs (Decode.list Decode.string)
 
-        --finalDecoder : Decoder (ErrorList b)
+        --finalDecoder : Decoder (ErrorList field)
         finalDecoder =
             Decode.customDecoder errorsDecoder (toFinalDecoder [])
 
@@ -74,7 +74,7 @@ errors mappings =
 
                 (fieldName, errors) :: others ->
                     let
-                        --newResults : Result String (ErrorList d)
+                        --newResults : Result String (ErrorList field)
                         newResults =
                             Decode.decodeString (fieldDecoderFor fieldName) ("\"" ++ fieldName ++ "\"")
                                 |> Result.map (tuplesFromField errors results)
@@ -87,7 +87,7 @@ errors mappings =
                             Ok newResultList ->
                                 toFinalDecoder newResultList others
 
-        --tuplesFromField : List String -> (ErrorList field) -> field -> (ErrorList g)
+        --tuplesFromField : List String -> (ErrorList field) -> field -> (ErrorList field)
         tuplesFromField errors results field =
             errors
                 |> List.map (\error -> (field, error))
