@@ -1,15 +1,21 @@
-module Rails (Error(..), get, post, send, fromJson, always, decoder) where
+module Rails (Error(..), get, post, send, fromJson, always, decoder, authToken) where
 
 {-|
 
 # Http
 @docs Error, get, post, send, fromJson, always, decoder
 
+# Tokens
+@docs authToken
+
 -}
 
 import Http
 import Task exposing (Task, succeed, fail, mapError, andThen)
 import Json.Decode exposing (Decoder, decodeString)
+
+
+import Native.Rails
 
 
 -- Http
@@ -167,6 +173,18 @@ handleResponse onSuccess onError response =
               case response.value of
                 Http.Text str -> onError response str
                 _ -> fail unexpectedPayloadError
+
+
+{-| get the rails authToken from the meta tag
+returns nothing if the tag doesn't exist
+-}
+authToken : Maybe String
+authToken =
+    let
+        auth = Native.Rails.authToken
+    in
+        if auth == "" then Nothing
+        else Just auth
 
 
 (=>) = (,)

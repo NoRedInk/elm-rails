@@ -10,6 +10,7 @@
         "Rails",
         "Rails.Decode"
     ],
+    "native-modules": true,
     "dependencies": {
         "elm-lang/core": "2.1.0 <= v < 4.0.0",
         "evancz/elm-http": "2.0.0 <= v < 4.0.0"
