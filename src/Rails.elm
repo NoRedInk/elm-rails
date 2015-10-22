@@ -1,15 +1,21 @@
-module Rails (send) where
+module Rails (send, authToken) where
 
 {-|
 
 # Http
 @docs send
 
+# Tokens
+@docs authToken
+
 -}
 
 import Http
 import Task exposing (Task)
 import Json.Decode exposing (Decoder)
+
+import Native.Rails
+
 
 -- Http
 
@@ -35,4 +41,17 @@ send authToken decoder verb url body =
         Http.send Http.defaultSettings requestSettings
             |> Http.fromJson decoder
 
+{-| get the rails authToken from the meta tag
+returns nothing if the tag doesn't exist
+-}
+authToken : Maybe String
+authToken =
+    let
+        auth = Native.Rails.authToken
+    in
+        if auth == "" then Nothing
+        else Just auth
+
+
 (=>) = (,)
+
