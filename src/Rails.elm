@@ -19,7 +19,7 @@ import Native.Rails
 
 -- Http
 
-{-| Utility for working with rails. Wraps Http.send passing a CSRF Token
+{-| Utility for working with Rails. Wraps Http.send passing a CSRF Token
 along with the type of request and a way to decode results.
 -}
 send : Decoder value -> String -> String -> Http.Body -> Task Http.Error value
