@@ -6,7 +6,7 @@ module Rails (send, authToken) where
 @docs send
 
 # Tokens
-@docs authToken
+@docs csrfToken
 
 -}
 
@@ -24,11 +24,11 @@ along with the type of request and a way to decode results.
 
 -}
 send : String -> Decoder value -> String -> String -> Http.Body -> Task Http.Error value
-send authToken decoder verb url body =
+send csrfToken decoder verb url body =
     let
         requestSettings =
             { verb = verb
-            , headers = ["X-CSRF-Token" => authToken
+            , headers = ["X-CSRF-Token" => csrfToken
                         , "Content-Type" => "application/json"
                         , "Accept" => "application/json, text/javascript, */*; q=0.01"
                         , "X-Requested-With" => "XMLHttpRequest"
@@ -44,8 +44,8 @@ send authToken decoder verb url body =
 {-| get the rails authToken from the meta tag
 returns nothing if the tag doesn't exist
 -}
-authToken : Maybe String
-authToken = Native.Rails.authToken
+csrfToken : Maybe String
+csrfToken = Native.Rails.csrfToken
 
 
 (=>) = (,)
