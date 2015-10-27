@@ -19,20 +19,26 @@ import Native.Rails
 
 -- Http
 
-{-| Utility for working with rails. Wraps Http.send passing an Authenticity Token
+{-| Utility for working with rails. Wraps Http.send passing a CSRF Token
 along with the type of request and a way to decode results.
-
 -}
-send : String -> Decoder value -> String -> String -> Http.Body -> Task Http.Error value
-send csrfToken decoder verb url body =
+send : Decoder value -> String -> String -> Http.Body -> Task Http.Error value
+send decoder verb url body =
     let
+        csrfTokenHeaders =
+            if (String.toUpper verb) == "GET" then
+                []
+            else
+                [ "X-CSRF-Token" => csrfToken ]
+
         requestSettings =
             { verb = verb
-            , headers = ["X-CSRF-Token" => csrfToken
-                        , "Content-Type" => "application/json"
-                        , "Accept" => "application/json, text/javascript, */*; q=0.01"
-                        , "X-Requested-With" => "XMLHttpRequest"
-                        ]
+            , headers =
+                csrfTokenHeaders ++
+                    [ "Content-Type" => "application/json"
+                    , "Accept" => "application/json, text/javascript, */*; q=0.01"
+                    , "X-Requested-With" => "XMLHttpRequest"
+                    ]
             , url = url
             , body = body
             }
