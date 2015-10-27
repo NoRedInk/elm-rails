@@ -13,8 +13,7 @@ Elm.Native.Rails.make = function(localRuntime) {
     var metaNode = document.querySelector('meta[name="csrf-token"]');
 
     var authToken = (function() {
-        if (metaNode === null){
-            console.log(metaNode);
+        if (metaNode === null || typeof metaNode.content === "undefined"){
             return $Maybe.Nothing;
         }
         return $Maybe.Just(metaNode.content);
