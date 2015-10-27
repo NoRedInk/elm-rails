@@ -14,12 +14,12 @@ import Http
 import Task exposing (Task, succeed, fail, mapError, andThen)
 import Json.Decode exposing (Decoder, decodeString)
 import Maybe
+import String
 
 import Native.Rails
 
 
 -- Http
-
 
 {-| The kinds of errors a Rails server may return.
 -}
@@ -32,14 +32,14 @@ type Error error
 
     import Json.Decode (list, string)
 
-    hats : String -> Task (Error (List String)) (List String)
-    hats csrfToken =
+    hats : Task (Error (List String)) (List String)
+    hats =
         get (decoder (list string) (succeed ())) "http://example.com/hat-categories.json"
 
 -}
-get : String -> ResponseDecoder error value -> String -> Task (Error error) value
-get csrfToken decoder url =
-    fromJson decoder (send csrfToken "GET" url Http.empty)
+get : ResponseDecoder error value -> String -> Task (Error error) value
+get decoder url =
+    fromJson decoder (send "GET" url Http.empty)
 
 
 {-| Send a POST request to the given URL. You also specify how to decode the response.
@@ -47,14 +47,14 @@ get csrfToken decoder url =
     import Json.Decode (list, string)
     import Http
 
-    hats : String -> Task (Error (List String)) (List String)
-    hats csrfToken =
+    hats : Task (Error (List String)) (List String)
+    hats =
         post (decoder (list string) (succeed ())) "http://example.com/hat-categories.json" Http.empty
 
 -}
-post : String -> ResponseDecoder error value -> String -> Http.Body -> Task (Error error) value
-post csrfToken decoder url body =
-    fromJson decoder (send csrfToken "POST" url body)
+post : ResponseDecoder error value -> String -> Http.Body -> Task (Error error) value
+post decoder url body =
+    fromJson decoder (send "POST" url body)
 
 
 {-| Utility for working with Rails. Wraps Http.send, passing an Authenticity Token along with the type of request. Suitable for use with `fromJson`:
@@ -64,8 +64,8 @@ post csrfToken decoder url body =
     import Json.Encode as Encode
     import Http
 
-    hats : String -> HatStyle -> Task (Error (List String)) (List String)
-    hats csrfToken style =
+    hats : HatStyle -> Task (Error (List String)) (List String)
+    hats style =
 
         let
             payload =
@@ -82,19 +82,26 @@ post csrfToken decoder url body =
                 Dict.fromList [ ("style", HatStyle) ]
                     |> Rails.Decode.errors
         in
-            send csrfToken "POST" url body
+            send "POST" url body
                 |> fromJson (decoder success failure)
 -}
-send : String -> String -> String -> Http.Body -> Task Http.RawError Http.Response
-send csrfToken verb url body =
+send : String -> String -> Http.Body -> Task Http.RawError Http.Response
+send verb url body =
     let
+        csrfTokenHeaders =
+            if (String.toUpper verb) == "GET" then
+                []
+            else
+                [ "X-CSRF-Token" => csrfToken ]
+
         requestSettings =
             { verb = verb
-            , headers = [ "X-CSRF-Token" => csrfToken
-                        , "Content-Type" => "application/json"
-                        , "Accept" => "application/json, text/javascript, */*; q=0.01"
-                        , "X-Requested-With" => "XMLHttpRequest"
-                        ]
+            , headers =
+                csrfTokenHeaders ++
+                    [ "Content-Type" => "application/json"
+                    , "Accept" => "application/json, text/javascript, */*; q=0.01"
+                    , "X-Requested-With" => "XMLHttpRequest"
+                    ]
             , url = url
             , body = body
             }
