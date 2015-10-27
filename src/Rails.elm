@@ -41,8 +41,11 @@ send csrfToken decoder verb url body =
         Http.send Http.defaultSettings requestSettings
             |> Http.fromJson decoder
 
-{-| get the rails authToken from the meta tag
-returns nothing if the tag doesn't exist
+{-| If there was a `<meta name="csrf-token">` tag in the page's `<head>` when
+elm-rails loaded, returns the value its `content` attribute had at that time.
+
+Rails expects this value in the `X-CSRF-Token` header for non-`GET` requests as
+a [CSRF countermeasure](http://guides.rubyonrails.org/security.html#csrf-countermeasures).
 -}
 csrfToken : Maybe String
 csrfToken = Native.Rails.csrfToken
