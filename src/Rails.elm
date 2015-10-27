@@ -13,7 +13,7 @@ module Rails (send, authToken) where
 import Http
 import Task exposing (Task)
 import Json.Decode exposing (Decoder)
-
+import Maybe
 import Native.Rails
 
 
@@ -45,12 +45,7 @@ send authToken decoder verb url body =
 returns nothing if the tag doesn't exist
 -}
 authToken : Maybe String
-authToken =
-    let
-        auth = Native.Rails.authToken
-    in
-        if auth == "" then Nothing
-        else Just auth
+authToken = Native.Rails.authToken
 
 
 (=>) = (,)

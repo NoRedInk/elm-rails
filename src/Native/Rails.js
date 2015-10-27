@@ -8,16 +8,16 @@ Elm.Native.Rails.make = function(localRuntime) {
         return localRuntime.Native.Rails.values;
     }
 
-    var NS = Elm.Native.Signal.make(localRuntime);
-    var Utils = Elm.Native.Utils.make(localRuntime);
+    var $Maybe = Elm.Maybe.make(localRuntime);
 
     var metaNode = document.querySelector('meta[name="csrf-token"]');
 
     var authToken = (function() {
         if (metaNode === null){
-            return "";
+            console.log(metaNode);
+            return $Maybe.Nothing;
         }
-        return metaNode.content;
+        return $Maybe.Just(metaNode.content);
     })();
 
     return localRuntime.Native.Rails.values = {
