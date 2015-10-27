@@ -17,6 +17,7 @@ import Maybe
 import String
 
 import Native.Rails
+import String
 
 
 -- Http
@@ -88,11 +89,16 @@ post decoder url body =
 send : String -> String -> Http.Body -> Task Http.RawError Http.Response
 send verb url body =
     let
+        csrfTokenString =
+            Maybe.withDefault "" csrfToken
+
         csrfTokenHeaders =
-            if (String.toUpper verb) == "GET" then
+            if (String.isEmpty csrfTokenString)
+                || ((String.toUpper verb) == "GET")
+            then
                 []
             else
-                [ "X-CSRF-Token" => csrfToken ]
+                [ "X-CSRF-Token" => csrfTokenString ]
 
         requestSettings =
             { verb = verb
