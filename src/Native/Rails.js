@@ -10,22 +10,10 @@ Elm.Native.Rails.make = function(localRuntime) {
 
     var $Maybe = Elm.Maybe.make(localRuntime);
 
-    var csrfTokenName = "csrf-token"
-    var csrfToken = $Maybe.Nothing;
-    var potentialMetaNodes = document.head.childNodes;
-
-    // Use this instead of document.querySelector() for pre-ES5 compatibility.
-    for (var index in potentialMetaNodes) {
-        var potentialMetaNode = potentialMetaNodes[index];
-
-        if (potentialMetaNode.tagName === "META"
-            && potentialMetaNode.name === csrfTokenName
-            && (typeof potentialMetaNode.content) === "string")
-        {
-            csrfToken = $Maybe.Just(potentialMetaNode.content);;
-            break;
-        }
-    }
+    var csrfTokenNode = document.querySelector('meta[name="csrf-token"]');
+    var csrfToken = (function() {
+        return (csrfTokenNode === null || (typeof csrfTokenNode.content) !== "string") ? $Maybe.Nothing : $Maybe.Just(csrfTokenNode.content);
+    })();
 
     return localRuntime.Native.Rails.values = {
         csrfToken : csrfToken
