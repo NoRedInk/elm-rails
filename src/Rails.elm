@@ -13,7 +13,7 @@ module Rails (Error(..), get, post, send, fromJson, always, decoder, authToken) 
 import Http
 import Task exposing (Task, succeed, fail, mapError, andThen)
 import Json.Decode exposing (Decoder, decodeString)
-
+import Maybe
 
 import Native.Rails
 
@@ -179,12 +179,7 @@ handleResponse onSuccess onError response =
 returns nothing if the tag doesn't exist
 -}
 authToken : Maybe String
-authToken =
-    let
-        auth = Native.Rails.authToken
-    in
-        if auth == "" then Nothing
-        else Just auth
+authToken = Native.Rails.authToken
 
 
 (=>) = (,)
