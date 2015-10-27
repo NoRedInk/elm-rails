@@ -1,6 +1,9 @@
-module Rails.Decode (errors) where
+module Rails.Decode (errors, ErrorList) where
 
 {-|
+
+Types
+@docs ErrorList
 
 # Decoding
 @docs errors
@@ -11,6 +14,19 @@ import Json.Decode as Decode exposing (Decoder, (:=))
 import Result exposing (Result)
 import Dict
 
+{-| ErrorList is a type alias for
+a list of fields to String, where `field` is expected to be a type for matching
+errors to
+```
+
+type Field = Name | Password
+
+decode : ErrorList Field
+
+```
+-}
+type alias ErrorList field =
+    List (field, String)
 
 -- Decoding
 
@@ -32,17 +48,18 @@ Dict.fromList
     ]
 
 -}
+errors : Dict.Dict String field -> Decoder (ErrorList field)
 errors mappings =
     let
         errorsDecoder : Decoder (List (String, List String))
         errorsDecoder =
             Decode.keyValuePairs (Decode.list Decode.string)
 
-        finalDecoder : Decoder (List (field, String))
+        --finalDecoder : Decoder (ErrorList field)
         finalDecoder =
             Decode.customDecoder errorsDecoder (toFinalDecoder [])
 
-        fieldDecoderFor : String -> Decoder field
+        --fieldDecoderFor : String -> Decoder field
         fieldDecoderFor fieldName =
             Dict.get fieldName mappings
                 |> Maybe.map Decode.succeed
@@ -57,7 +74,7 @@ errors mappings =
 
                 (fieldName, errors) :: others ->
                     let
-                        newResults : Result String (List (field, String))
+                        --newResults : Result String (ErrorList field)
                         newResults =
                             Decode.decodeString (fieldDecoderFor fieldName) ("\"" ++ fieldName ++ "\"")
                                 |> Result.map (tuplesFromField errors results)
@@ -70,7 +87,7 @@ errors mappings =
                             Ok newResultList ->
                                 toFinalDecoder newResultList others
 
-        tuplesFromField : List String -> List (field, String) -> field -> List (field, String)
+        --tuplesFromField : List String -> (ErrorList field) -> field -> (ErrorList field)
         tuplesFromField errors results field =
             errors
                 |> List.map (\error -> (field, error))
