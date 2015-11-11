@@ -7,7 +7,7 @@ module Rails (send) where
 
 -}
 
-import Http
+import Http exposing (Value(..))
 import Task exposing (Task)
 import Json.Decode exposing (Decoder)
 
@@ -31,8 +31,15 @@ send authToken decoder verb url body =
             , body = body
             }
 
+        emptyBodyToNull response =
+            -- Translate an empty body into "null" for JSON parsing
+            if response.value == Text "" then
+                { response | value <- Text "null" }
+            else
+                response
     in
         Http.send Http.defaultSettings requestSettings
+            |> Task.map emptyBodyToNull
             |> Http.fromJson decoder
 
 (=>) = (,)
