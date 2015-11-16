@@ -22,7 +22,7 @@ send authToken decoder verb url body =
     let
         requestSettings =
             { verb = verb
-            , headers = ["X-CSRF-Token" => authToken
+            , headers = [ "X-CSRF-Token" => authToken
                         , "Content-Type" => "application/json"
                         , "Accept" => "application/json, text/javascript, */*; q=0.01"
                         , "X-Requested-With" => "XMLHttpRequest"
