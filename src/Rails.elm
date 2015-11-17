@@ -1,9 +1,9 @@
-module Rails (Error(..), send, sendRaw, fromJson, always, decoder) where
+module Rails (Error(..), get, post, send, fromJson, always, decoder) where
 
 {-|
 
 # Http
-@docs Error, send, sendRaw, fromJson, always, decoder
+@docs Error, get, post, send, fromJson, always, decoder
 
 -}
 
@@ -22,31 +22,65 @@ type Error error
     | RailsError error
 
 
-{-| Utility for working with Rails. Wraps Http.send passing an Authenticity Token
-along with the type of request and a way to decode results.
+{-| Send a GET request to the given URL. You also specify how to decode the response.
+
+    import Json.Decode (list, string)
+
+    hats : String -> Task (Error (List String)) (List String)
+    hats authToken =
+        get (decoder (list string) (succeed ())) "http://example.com/hat-categories.json"
 
 -}
-send : String -> Decoder value -> String -> String -> Http.Body -> Task (Error value) value
-send authToken decoder verb url body =
-    sendRaw authToken verb url body
-    |> fromJson (always decoder)
+get : String -> ResponseDecoder error value -> String -> Task (Error error) value
+get authToken decoder url =
+    fromJson decoder (send authToken "GET" url Http.empty)
 
 
-{-| Utility for working with Rails. Wraps Http.send passing an Authenticity Token along with the type of request. Suitable for use with `fromJson`:
+{-| Send a POST request to the given URL. You also specify how to decode the response.
 
-    let
-        success =
-            Json.Decode.list Json.Decode.string
+    import Json.Decode (list, string)
+    import Http
 
-        failure =
-            Dict.fromList [ ("hat_kind", HatKind) ]
-                |> Rails.Decode.errors
-    in
-        Rails.sendRaw authToken "POST" url body
-            |> Rails.fromJson (Rails.decoder success failure)
+    hats : String -> Task (Error (List String)) (List String)
+    hats authToken =
+        post (decoder (list string) (succeed ())) "http://example.com/hat-categories.json" Http.empty
+
 -}
-sendRaw : String -> String -> String -> Http.Body -> Task Http.RawError Http.Response
-sendRaw authToken verb url body =
+post : String -> ResponseDecoder error value -> String -> Http.Body -> Task (Error error) value
+post authToken decoder url body =
+    fromJson decoder (send authToken "POST" url body)
+
+
+{-| Utility for working with Rails. Wraps Http.send, passing an Authenticity Token along with the type of request. Suitable for use with `fromJson`:
+
+    import Dict
+    import Json.Decode (list, string)
+    import Json.Encode as Encode
+    import Http
+
+    hats : String -> HatStyle -> Task (Error (List String)) (List String)
+    hats authToken style =
+
+        let
+            payload =
+                Encode.object
+                    [ ( "style", encodeHatStyle style ) ]
+
+            body =
+                Http.string (Encode.encode 0 payload)
+
+            success =
+                list string
+
+            failure =
+                Dict.fromList [ ("style", HatStyle) ]
+                    |> Rails.Decode.errors
+        in
+            send authToken "POST" url body
+                |> fromJson (decoder success failure)
+-}
+send : String -> String -> String -> Http.Body -> Task Http.RawError Http.Response
+send authToken verb url body =
     let
         requestSettings =
             { verb = verb
@@ -58,7 +92,6 @@ sendRaw authToken verb url body =
             , url = url
             , body = body
             }
-
     in
         Http.send Http.defaultSettings requestSettings
 
