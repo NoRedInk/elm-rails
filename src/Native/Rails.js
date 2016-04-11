@@ -10,7 +10,10 @@ Elm.Native.Rails.make = function(localRuntime) {
 
     var $Maybe = Elm.Maybe.make(localRuntime);
 
-    var csrfTokenNode = document.head.querySelector('meta[name="csrf-token"]');
+    var csrfTokenNode =
+      (typeof document === "undefined")
+        ? null
+        : document.head.querySelector('meta[name="csrf-token"]');
     var csrfToken =
         (csrfTokenNode === null || (typeof csrfTokenNode.content !== "string"))
             ? $Maybe.Nothing
