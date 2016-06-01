@@ -1,11 +1,15 @@
-module Main where
+module Main exposing (..)
 
 import Rails
+import Html exposing (div, text)
 
-import Graphics.Element exposing (show)
 
 main =
-    case Rails.csrfToken of
-        Nothing -> show "Nothing"
-        Just v -> show v
-        _ -> show Rails.csrfToken
+    div []
+        [ case Rails.csrfToken of
+            Nothing ->
+                text "Nothing"
+
+            Just v ->
+                text v
+        ]
