@@ -1,4 +1,4 @@
-module Rails (Error(..), get, post, send, fromJson, always, decoder, csrfToken) where
+module Rails exposing (Error(..), get, post, send, fromJson, always, decoder, csrfToken)
 
 {-|
 

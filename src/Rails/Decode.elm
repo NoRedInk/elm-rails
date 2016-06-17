@@ -1,4 +1,4 @@
-module Rails.Decode (errors, ErrorList) where
+module Rails.Decode exposing (errors, ErrorList)
 
 {-|
 
