@@ -44,12 +44,12 @@ get decoder url =
 
 {-| Send a POST request to the given URL. You also specify how to decode the response.
 
-  import Json.Decode (list, string)
-  import Http
+    import Json.Decode (list, string)
+    import Http
 
-  hats : Task (Error (List String)) (List String)
-  hats =
-    post (decoder (list string) (succeed ())) "http://example.com/hat-categories.json" Http.empty
+    hats : Task (Error (List String)) (List String)
+    hats =
+      post (decoder (list string) (succeed ())) "http://example.com/hat-categories.json" Http.empty
 
 -}
 post : ResponseDecoder error value -> String -> Http.Body -> Task (Error error) value

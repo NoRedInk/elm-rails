@@ -37,6 +37,7 @@ type alias ErrorList field =
 This function takes a Dict that is a map of all the fields you need decoded. It should be formatted
 nest
 
+```
 Dict.fromList
     [ ( "school", School )
     , ( "school.name", SchoolName )
@@ -46,7 +47,7 @@ Dict.fromList
     , ( "school.zip", Zip )
     , ( "school.country", Country )
     ]
-
+```
 -}
 errors : Dict.Dict String field -> Decoder (ErrorList field)
 errors mappings =
