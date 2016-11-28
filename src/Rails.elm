@@ -13,7 +13,7 @@ module Rails exposing (Error(..), get, post, send, fromJson, always, decoder, cs
 import Http
 import Task exposing (Task, succeed, fail, mapError, andThen)
 import Json.Decode exposing (Decoder, decodeString)
-import Maybe
+import Result exposing (Result)
 import String
 import Native.Rails
 
@@ -209,7 +209,7 @@ handleResponse onSuccess onError response =
     Rails expects this value in the `X-CSRF-Token` header for non-`GET` requests as
     a [CSRF countermeasure](http://guides.rubyonrails.org/security.html#csrf-countermeasures).
 -}
-csrfToken : Maybe String
+csrfToken : Result String String
 csrfToken =
   Native.Rails.csrfToken
 
