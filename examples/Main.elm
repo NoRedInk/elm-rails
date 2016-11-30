@@ -1,15 +1,16 @@
 module Main exposing (..)
 
 import Rails
-import Html exposing (div, text)
+import Html exposing (div, text, Html)
 
 
+main : Html msg
 main =
     div []
         [ case Rails.csrfToken of
-            Nothing ->
-                text "Nothing"
+            Err err ->
+                text ("csrfToken error: " ++ err)
 
-            Just v ->
+            Ok v ->
                 text v
         ]
