@@ -160,17 +160,16 @@ request :
     -> Request a
 request options =
     let
-        csrfTokenString =
-            Result.withDefault "" csrfToken
-
         csrfTokenHeaders =
-            if
-                String.isEmpty csrfTokenString
-                    || ((String.toUpper options.method) == "GET")
-            then
+            if (String.toUpper options.method) == "GET" then
                 []
             else
-                [ Http.header "X-CSRF-Token" csrfTokenString ]
+                case csrfToken of
+                    Err _ ->
+                        []
+
+                    Ok csrfTokenString ->
+                        [ Http.header "X-CSRF-Token" csrfTokenString ]
 
         headers =
             List.concat
