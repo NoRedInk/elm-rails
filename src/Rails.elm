@@ -1,9 +1,9 @@
-module Rails exposing (get, post, always, decoder, csrfToken, request, expectRailsJson)
+module Rails exposing (Error(..), get, post, send, always, decoder, csrfToken, request, expectRailsJson)
 
 {-|
 
 ## Requests
-@docs get, post, request
+@docs Error, get, post, send, request
 
 ## Decoding
 @docs decoder, always
@@ -22,6 +22,52 @@ import Native.Rails
 
 
 -- Http
+
+
+{-| The kinds of errors a Rails server may return.
+-}
+type Error error
+    = HttpError Http.Error
+    | RailsError error
+
+
+{-| Utility for working with Rails. Wraps Http.send, passing an Authenticity Token along with the type of request. Suitable for use with `fromJson`:
+    import Dict
+    import Json.Decode (list, string)
+    import Json.Encode as Encode
+    import Http
+    hats : HatStyle -> Task (Error (List String)) (List String)
+    hats style =
+      let
+        payload =
+          Encode.object
+            [ ( "style", encodeHatStyle style ) ]
+        body =
+          Http.string (Encode.encode 0 payload)
+        success =
+          list string
+        failure =
+          Dict.fromList [ ("style", HatStyle) ]
+            |> Rails.Decode.errors
+      in
+        send "POST" url body
+          |> fromJson (decoder success failure)
+-}
+send : (Result (Error error) success -> msg) -> Request (Result error success) -> Cmd msg
+send toMsg req =
+    let
+        newToMsg result =
+            case result of
+                Err err ->
+                    toMsg (Err (HttpError err))
+
+                Ok (Err railsError) ->
+                    toMsg (Err (RailsError railsError))
+
+                Ok (Ok success) ->
+                    toMsg (Ok success)
+    in
+        Http.send newToMsg req
 
 
 {-| Send a GET request to the given URL. You also specify how to decode the response.
