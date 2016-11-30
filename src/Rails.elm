@@ -31,27 +31,37 @@ type Error error
     | RailsError error
 
 
-{-| Utility for working with Rails. Wraps Http.send, passing an Authenticity Token along with the type of request. Suitable for use with `fromJson`:
+{-| Send an HTTP request to Rails. This uses [`request`](#request) under the
+hood, which means that a CSRF token will automatically be passed, among
+other things. The Error handler uses a [`Rails.Error`](#Error), which includes
+more information than the standard `Http.Error`.
+
     import Dict
-    import Json.Decode (list, string)
+    import Json.Decode exposing (list, string)
     import Json.Encode as Encode
     import Http
-    hats : HatStyle -> Task (Error (List String)) (List String)
-    hats style =
-      let
-        payload =
-          Encode.object
-            [ ( "style", encodeHatStyle style ) ]
-        body =
-          Http.string (Encode.encode 0 payload)
-        success =
-          list string
-        failure =
-          Dict.fromList [ ("style", HatStyle) ]
-            |> Rails.Decode.errors
-      in
-        send "POST" url body
-          |> fromJson (decoder success failure)
+    import Rails.Decode
+    import Rails
+
+
+    requestHats : HatStyle -> Cmd Msg
+    requestHats style =
+        let
+            body =
+                [ ( "style", encodeHatStyle style ) ]
+                    |> Encode.object
+                    |> Http.jsonBody
+
+            success =
+                list string
+
+            failure =
+                Dict.fromList [ ( "style", HatStyle ) ]
+                    |> Rails.Decode.errors
+        in
+            Rails.decoder success failure
+                |> Rails.post url body
+                |> Rails.send HandleResponse
 -}
 send : (Result (Error error) success -> msg) -> Request (Result error success) -> Cmd msg
 send toMsg req =
@@ -70,14 +80,18 @@ send toMsg req =
         Http.send newToMsg req
 
 
-{-| Send a GET request to the given URL. You also specify how to decode the response.
+{-| Send a GET request to the given URL. Specify how to decode the response.
 
-    import Json.Decode (list, string)
+    import Json.Decode exposing (list, string, succeed)
+    import Http
+    import Rails
 
-    hats : Task (Error (List String)) (List String)
-    hats =
-      get (decoder (list string) (succeed ())) "http://example.com/hat-categories.json"
 
+    getHats : Cmd msg
+    getHats =
+        Rails.decoder (list string) (succeed ())
+            |> Rails.get "http://example.com/hat-categories.json"
+            |> Rails.send HandleGetHatsResponse
 -}
 get : String -> ResponseDecoder error success -> Request (Result error success)
 get url responseDecoder =
@@ -92,14 +106,18 @@ get url responseDecoder =
         }
 
 
-{-| Send a POST request to the given URL. You also specify how to decode the response.
+{-| Send a POST request to the given URL. Specify how to decode the response.
 
-    import Json.Decode (list, string)
+    import Json.Decode exposing (list, string, succeed)
     import Http
+    import Rails
 
-    hats : Task (Error (List String)) (List String)
+
+    hats : Cmd msg
     hats =
-      post (decoder (list string) (succeed ())) "http://example.com/hat-categories.json" Http.empty
+        Rails.decoder (list string) (succeed ())
+            |> Rails.post "http://example.com/hat-categories/new" Http.emptyBody
+            |> Rails.send HandleResponse
 
 -}
 post : String -> Http.Body -> ResponseDecoder error success -> Request (Result error success)
@@ -118,34 +136,42 @@ post url body responseDecoder =
 {-| Wraps `Http.request` while adding the following default headers:
 
 * `X-CSRF-Token` - set to `csrfToken` if it's an `Ok` and this request isn't a `GET`
+* `Content-Type` - `"application/json"`
 * `Accept` - `"application/json, text/javascript, */*; q=0.01"`
 * `X-Requested-With` - `"XMLHttpRequest"`
 
     import Dict
-    import Json.Decode (list, string)
+    import Json.Decode exposing (list, string)
     import Json.Encode as Encode
     import Http
+    import Rails.Decode
+    import Rails
 
-    hats : HatStyle -> Task (Error (List String)) (List String)
-    hats style =
 
-      let
-        payload =
-          Encode.object
-            [ ( "style", encodeHatStyle style ) ]
+    hatRequest : HatStyle -> Request (Result (ErrorList Field) Hat)
+    hatRequest style =
+        let
+            body =
+                [ ( "style", encodeHatStyle style ) ]
+                    |> Encode.object
+                    |> Http.jsonBody
 
-        body =
-          Http.string (Encode.encode 0 payload)
+            success =
+                list string
 
-        success =
-          list string
-
-        failure =
-          Dict.fromList [ ("style", HatStyle) ]
-            |> Rails.Decode.errors
-      in
-        send "POST" url body
-          |> fromJson (decoder success failure)
+            failure =
+                Dict.fromList [ ( "style", HatStyle ) ]
+                    |> Rails.Decode.errors
+        in
+            Rails.request
+                { method = "POST"
+                , headers = []
+                , url = url
+                , body = body
+                , expect = expectRailsJson (Rails.decoder success failure)
+                , timeout = Nothing
+                , withCredentials = False
+                }
 -}
 request :
     { method : String
@@ -195,14 +221,15 @@ type alias ResponseDecoder error success =
     }
 
 
-{-| Returns a decoder suitable for passing to `fromJson`, which uses the same decoder for both success and failure responses.
+{-| Returns a `ResponseDecoder` which uses the same decoder for both success and
+failures.
 -}
 always : Decoder success -> ResponseDecoder success success
 always decoder =
     ResponseDecoder decoder decoder
 
 
-{-| Returns a decoder suitable for passing to `fromJson`.
+{-| Returns a `ResponseDecoder`.
 -}
 decoder : Decoder success -> Decoder error -> ResponseDecoder error success
 decoder successDecoder failureDecoder =
