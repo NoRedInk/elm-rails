@@ -15,15 +15,13 @@ import Result exposing (Result)
 import Dict
 
 
-{-| ErrorList is a type alias for
-a list of fields to String, where `field` is expected to be a type for matching
-errors to
-```
+{-| ErrorList is a type alias for a list of `( fields, String )` pairs,
+where `field` is a type we can use to reference which fields had errors.
 
+```
 type Field = Name | Password
 
 decode : ErrorList Field
-
 ```
 -}
 type alias ErrorList field =
@@ -34,12 +32,12 @@ type alias ErrorList field =
 -- Decoding
 
 
-{-| Decodes errors passed from rails formatted as
+{-| Decodes errors passed from rails formatted like this:
 
 `{ errors: {errorName: ["Error String"] } }`.
 
-This function takes a Dict that is a map of all the fields you need decoded. It should be formatted
-nest
+This function takes a Dict that is a map of all the fields you need decoded.
+It should look like this:
 
 ```
 Dict.fromList
