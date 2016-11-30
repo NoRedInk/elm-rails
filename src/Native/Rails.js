@@ -14,12 +14,11 @@ var _NoRedInk$elm_rails$Native_Rails = function(){
       // ignore document-based errors
     }
 
-    var csrfToken =
-      ((csrfTokenNode !== null) && (typeof csrfTokenNode.content === "string"))
-        ? { ctor: 'Ok', _0: csrfTokenNode.content }
-        : { ctor: 'Err', _0: "<meta name=\"csrf-token\"> was not found in document.head." };
-
-    return csrfToken;
+    if ((csrfTokenNode !== null) && (typeof csrfTokenNode.content === "string")) {
+      return { ctor: 'Ok', _0: csrfTokenNode.content };
+    } else {
+      return { ctor: 'Err', _0: "<meta name=\"csrf-token\"> was not found in document.head." };
+    }
   };
 
   return {
