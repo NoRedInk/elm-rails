@@ -1,9 +1,9 @@
-module Rails exposing (Response(..), get, post, always, decoder, csrfToken, request, expectRailsJson)
+module Rails exposing (get, post, always, decoder, csrfToken, request, expectRailsJson)
 
 {-|
 
 ## Requests
-@docs Response, get, post, request
+@docs get, post, request
 
 ## Decoding
 @docs decoder, always
@@ -13,7 +13,7 @@ module Rails exposing (Response(..), get, post, always, decoder, csrfToken, requ
 
 -}
 
-import Http exposing (Request, Body, Expect, Header)
+import Http exposing (Request, Response, Body, Expect, Header)
 import Time exposing (Time)
 import Json.Decode exposing (Decoder, decodeString)
 import Result exposing (Result)
@@ -22,13 +22,6 @@ import Native.Rails
 
 
 -- Http
-
-
-{-| A rails server may respond with either success or a custom error message.
--}
-type Response error success
-    = Error error
-    | Success success
 
 
 {-| Send a GET request to the given URL. You also specify how to decode the response.
@@ -40,7 +33,7 @@ type Response error success
       get (decoder (list string) (succeed ())) "http://example.com/hat-categories.json"
 
 -}
-get : String -> ResponseDecoder error success -> Request (Response error success)
+get : String -> ResponseDecoder error success -> Request (Result error success)
 get url responseDecoder =
     request
         { method = "GET"
@@ -63,7 +56,7 @@ get url responseDecoder =
       post (decoder (list string) (succeed ())) "http://example.com/hat-categories.json" Http.empty
 
 -}
-post : String -> Http.Body -> ResponseDecoder error success -> Request (Response error success)
+post : String -> Http.Body -> ResponseDecoder error success -> Request (Result error success)
 post url body responseDecoder =
     request
         { method = "POST"
@@ -114,11 +107,11 @@ request :
     , headers : List Header
     , url : String
     , body : Body
-    , expect : Expect (Response error success)
+    , expect : Expect (Result error success)
     , timeout : Maybe Time
     , withCredentials : Bool
     }
-    -> Request (Response error success)
+    -> Request (Result error success)
 request options =
     let
         csrfTokenString =
@@ -187,19 +180,21 @@ csrfToken =
 {-| Think `Http.fromJson`, but with additional effort to parse a non-20x response as JSON.
 
   * If the status code is in the 200 range, try to parse with the given `decoder.success`.
+  * If that succeeds, the result is `Ok` with the result.
   * If the status code is outside the 200 range, try to parse with the given `decoder.failure`.
-  * If either parsing fails, return an error
+  * If that succeeds, the result is `Err` with the result.
+  * If either parsing fails, the request as a whole fails.
 -}
-expectRailsJson : ResponseDecoder error success -> Expect (Response error success)
+expectRailsJson : ResponseDecoder error success -> Expect (Result error success)
 expectRailsJson responseDecoder =
     let
-        fromResponse : Http.Response String -> Result String (Response error success)
+        fromResponse : Response String -> Result String (Result error success)
         fromResponse { status, body } =
             if status.code >= 200 && status.code < 300 then
                 Json.Decode.decodeString responseDecoder.success body
-                    |> Result.map Success
+                    |> Result.map Ok
             else
                 Json.Decode.decodeString responseDecoder.failure body
-                    |> Result.map Error
+                    |> Result.map Err
     in
         Http.expectStringResponse fromResponse
