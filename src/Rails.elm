@@ -118,7 +118,6 @@ post url body responseDecoder =
 {-| Wraps `Http.request` while adding the following default headers:
 
 * `X-CSRF-Token` - set to `csrfToken` if it's an `Ok` and this request isn't a `GET`
-* `Content-Type` - `"application/json"`
 * `Accept` - `"application/json, text/javascript, */*; q=0.01"`
 * `X-Requested-With` - `"XMLHttpRequest"`
 
@@ -183,8 +182,7 @@ request options =
 
 defaultRequestHeaders : List Header
 defaultRequestHeaders =
-    [ Http.header "Content-Type" "application/json"
-    , Http.header "Accept" "application/json, text/javascript, */*; q=0.01"
+    [ Http.header "Accept" "application/json, text/javascript, */*; q=0.01"
     , Http.header "X-Requested-With" "XMLHttpRequest"
     ]
 
