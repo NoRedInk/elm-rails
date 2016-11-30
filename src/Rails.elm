@@ -107,11 +107,11 @@ request :
     , headers : List Header
     , url : String
     , body : Body
-    , expect : Expect (Result error success)
+    , expect : Expect a
     , timeout : Maybe Time
     , withCredentials : Bool
     }
-    -> Request (Result error success)
+    -> Request a
 request options =
     let
         csrfTokenString =
