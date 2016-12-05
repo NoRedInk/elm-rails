@@ -10,32 +10,34 @@ Types
 
 -}
 
-import Json.Decode as Decode exposing (Decoder, (:=))
+import Json.Decode as Decode exposing (Decoder, field)
 import Result exposing (Result)
 import Dict
 
-{-| ErrorList is a type alias for
-a list of fields to String, where `field` is expected to be a type for matching
-errors to
-```
 
+{-| ErrorList is a type alias for a list of `( fields, String )` pairs,
+where `field` is a type we can use to reference which fields had errors.
+
+```
 type Field = Name | Password
 
 decode : ErrorList Field
-
 ```
 -}
 type alias ErrorList field =
-    List (field, String)
+    List ( field, String )
+
+
 
 -- Decoding
 
-{-| Decodes errors passed from rails formatted as
+
+{-| Decodes errors passed from rails formatted like this:
 
 `{ errors: {errorName: ["Error String"] } }`.
 
-This function takes a Dict that is a map of all the fields you need decoded. It should be formatted
-nest
+This function takes a Dict that is a map of all the fields you need decoded.
+It should look like this:
 
 ```
 Dict.fromList
@@ -52,47 +54,48 @@ Dict.fromList
 errors : Dict.Dict String field -> Decoder (ErrorList field)
 errors mappings =
     let
-        errorsDecoder : Decoder (List (String, List String))
+        errorsDecoder : Decoder (List ( String, List String ))
         errorsDecoder =
             Decode.keyValuePairs (Decode.list Decode.string)
 
-        --finalDecoder : Decoder (ErrorList field)
+        finalDecoder : Decoder (ErrorList field)
         finalDecoder =
-            Decode.customDecoder errorsDecoder (toFinalDecoder [])
+            errorsDecoder
+                |> Decode.andThen (toFinalDecoder [])
 
-        --fieldDecoderFor : String -> Decoder field
+        fieldDecoderFor : String -> Decoder field
         fieldDecoderFor fieldName =
             Dict.get fieldName mappings
                 |> Maybe.map Decode.succeed
                 |> Maybe.withDefault (Decode.fail ("Unrecognized Field: " ++ fieldName))
 
-
-        -- toFinalDecoder : List (field, String) -> List (String, (List String)) -> Result String (List (field, String))
+        toFinalDecoder :
+            List ( field, String )
+            -> List ( String, List String )
+            -> Decoder (List ( field, String ))
         toFinalDecoder results rawErrors =
             case rawErrors of
                 [] ->
-                    Ok results
+                    Decode.succeed results
 
-                (fieldName, errors) :: others ->
+                ( fieldName, errors ) :: others ->
                     let
-                        --newResults : Result String (ErrorList field)
+                        newResults : Result String (ErrorList field)
                         newResults =
                             Decode.decodeString (fieldDecoderFor fieldName) ("\"" ++ fieldName ++ "\"")
                                 |> Result.map (tuplesFromField errors results)
-
                     in
                         case newResults of
-                            Err _ ->
-                                newResults
+                            Err err ->
+                                Decode.fail err
 
                             Ok newResultList ->
                                 toFinalDecoder newResultList others
 
-        --tuplesFromField : List String -> (ErrorList field) -> field -> (ErrorList field)
+        tuplesFromField : List String -> ErrorList field -> field -> ErrorList field
         tuplesFromField errors results field =
             errors
-                |> List.map (\error -> (field, error))
+                |> List.map (\error -> ( field, error ))
                 |> List.append results
-
     in
-        "errors" := finalDecoder
+        field "errors" finalDecoder

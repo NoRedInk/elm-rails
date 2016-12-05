@@ -1,19 +1,22 @@
-module Rails exposing (Error(..), get, post, send, fromJson, always, decoder, csrfToken)
+module Rails exposing (Error(..), get, post, send, always, decoder, csrfToken, request, expectRailsJson)
 
 {-|
 
-# Http
-@docs Error, get, post, send, fromJson, always, decoder
+## Requests
+@docs Error, get, post, send, request
 
-# Tokens
-@docs csrfToken
+## Decoding
+@docs decoder, always
+
+## Customizing
+@docs csrfToken, expectRailsJson
 
 -}
 
-import Http
-import Task exposing (Task, succeed, fail, mapError, andThen)
+import Http exposing (Request, Response, Body, Expect, Header)
+import Time exposing (Time)
 import Json.Decode exposing (Decoder, decodeString)
-import Maybe
+import Result exposing (Result)
 import String
 import Native.Rails
 
@@ -24,183 +27,213 @@ import Native.Rails
 {-| The kinds of errors a Rails server may return.
 -}
 type Error error
-  = HttpError Http.Error
-  | RailsError error
+    = HttpError Http.Error
+    | RailsError error
 
 
-{-| Send a GET request to the given URL. You also specify how to decode the response.
-
-    import Json.Decode (list, string)
-
-    hats : Task (Error (List String)) (List String)
-    hats =
-      get (decoder (list string) (succeed ())) "http://example.com/hat-categories.json"
-
--}
-get : ResponseDecoder error value -> String -> Task (Error error) value
-get decoder url =
-  fromJson decoder (send "GET" url Http.empty)
-
-
-{-| Send a POST request to the given URL. You also specify how to decode the response.
-
-    import Json.Decode (list, string)
-    import Http
-
-    hats : Task (Error (List String)) (List String)
-    hats =
-      post (decoder (list string) (succeed ())) "http://example.com/hat-categories.json" Http.empty
-
--}
-post : ResponseDecoder error value -> String -> Http.Body -> Task (Error error) value
-post decoder url body =
-  fromJson decoder (send "POST" url body)
-
-
-{-| Utility for working with Rails. Wraps Http.send, passing an Authenticity Token along with the type of request. Suitable for use with `fromJson`:
+{-| Send an HTTP request to Rails. This uses [`request`](#request) under the
+hood, which means that a CSRF token will automatically be passed, among
+other things. The Error handler uses a [`Rails.Error`](#Error), which includes
+more information than the standard `Http.Error`.
 
     import Dict
-    import Json.Decode (list, string)
+    import Json.Decode exposing (list, string)
     import Json.Encode as Encode
     import Http
+    import Rails.Decode
+    import Rails
 
-    hats : HatStyle -> Task (Error (List String)) (List String)
-    hats style =
 
-      let
-        payload =
-          Encode.object
-            [ ( "style", encodeHatStyle style ) ]
+    requestHats : HatStyle -> Cmd Msg
+    requestHats style =
+        let
+            body =
+                [ ( "style", encodeHatStyle style ) ]
+                    |> Encode.object
+                    |> Http.jsonBody
 
-        body =
-          Http.string (Encode.encode 0 payload)
+            success =
+                list string
 
-        success =
-          list string
-
-        failure =
-          Dict.fromList [ ("style", HatStyle) ]
-            |> Rails.Decode.errors
-      in
-        send "POST" url body
-          |> fromJson (decoder success failure)
+            failure =
+                Dict.fromList [ ( "style", HatStyle ) ]
+                    |> Rails.Decode.errors
+        in
+            Rails.decoder success failure
+                |> Rails.post url body
+                |> Rails.send HandleResponse
 -}
-send : String -> String -> Http.Body -> Task Http.RawError Http.Response
-send verb url body =
-  let
-    csrfTokenString =
-      Maybe.withDefault "" csrfToken
+send : (Result (Error error) success -> msg) -> Request (Result error success) -> Cmd msg
+send toMsg req =
+    let
+        newToMsg result =
+            case result of
+                Err err ->
+                    toMsg (Err (HttpError err))
 
-    csrfTokenHeaders =
-      if
-        (String.isEmpty csrfTokenString)
-          || ((String.toUpper verb) == "GET")
-      then
-        []
-      else
-        [ "X-CSRF-Token" => csrfTokenString ]
+                Ok (Err railsError) ->
+                    toMsg (Err (RailsError railsError))
 
-    requestSettings =
-      { verb = verb
-      , headers =
-          csrfTokenHeaders
-            ++ [ "Content-Type" => "application/json"
-               , "Accept" => "application/json, text/javascript, */*; q=0.01"
-               , "X-Requested-With" => "XMLHttpRequest"
-               ]
-      , url = url
-      , body = body
-      }
-  in
-    Http.send Http.defaultSettings requestSettings
+                Ok (Ok success) ->
+                    toMsg (Ok success)
+    in
+        Http.send newToMsg req
+
+
+{-| Send a GET request to the given URL. Specify how to decode the response.
+
+    import Json.Decode exposing (list, string, succeed)
+    import Http
+    import Rails
+
+
+    getHats : Cmd msg
+    getHats =
+        Rails.decoder (list string) (succeed ())
+            |> Rails.get "http://example.com/hat-categories.json"
+            |> Rails.send HandleGetHatsResponse
+-}
+get : String -> ResponseDecoder error success -> Request (Result error success)
+get url responseDecoder =
+    request
+        { method = "GET"
+        , headers = []
+        , url = url
+        , body = Http.emptyBody
+        , expect = expectRailsJson responseDecoder
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
+
+{-| Send a POST request to the given URL. Specify how to decode the response.
+
+    import Json.Decode exposing (list, string, succeed)
+    import Http
+    import Rails
+
+
+    hats : Cmd msg
+    hats =
+        Rails.decoder (list string) (succeed ())
+            |> Rails.post "http://example.com/hat-categories/new" Http.emptyBody
+            |> Rails.send HandleResponse
+
+-}
+post : String -> Http.Body -> ResponseDecoder error success -> Request (Result error success)
+post url body responseDecoder =
+    request
+        { method = "POST"
+        , headers = []
+        , url = url
+        , body = body
+        , expect = expectRailsJson responseDecoder
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
+
+{-| Wraps `Http.request` while adding the following default headers:
+
+* `X-CSRF-Token` - set to `csrfToken` if it's an `Ok` and this request isn't a `GET`
+* `Content-Type` - `"application/json"`
+* `Accept` - `"application/json, text/javascript, */*; q=0.01"`
+* `X-Requested-With` - `"XMLHttpRequest"`
+
+    import Dict
+    import Json.Decode exposing (list, string)
+    import Json.Encode as Encode
+    import Http
+    import Rails.Decode
+    import Rails
+
+
+    hatRequest : HatStyle -> Request (Result (ErrorList Field) Hat)
+    hatRequest style =
+        let
+            body =
+                [ ( "style", encodeHatStyle style ) ]
+                    |> Encode.object
+                    |> Http.jsonBody
+
+            success =
+                list string
+
+            failure =
+                Dict.fromList [ ( "style", HatStyle ) ]
+                    |> Rails.Decode.errors
+        in
+            Rails.request
+                { method = "POST"
+                , headers = []
+                , url = url
+                , body = body
+                , expect = expectRailsJson (Rails.decoder success failure)
+                , timeout = Nothing
+                , withCredentials = False
+                }
+-}
+request :
+    { method : String
+    , headers : List Header
+    , url : String
+    , body : Body
+    , expect : Expect a
+    , timeout : Maybe Time
+    , withCredentials : Bool
+    }
+    -> Request a
+request options =
+    let
+        csrfTokenHeaders =
+            if (String.toUpper options.method) == "GET" then
+                []
+            else
+                case csrfToken of
+                    Err _ ->
+                        []
+
+                    Ok csrfTokenString ->
+                        [ Http.header "X-CSRF-Token" csrfTokenString ]
+
+        headers =
+            List.concat
+                [ defaultRequestHeaders
+                , csrfTokenHeaders
+                , options.headers
+                ]
+    in
+        Http.request { options | headers = headers }
+
+
+defaultRequestHeaders : List Header
+defaultRequestHeaders =
+    [ Http.header "Accept" "application/json, text/javascript, */*; q=0.01"
+    , Http.header "X-Requested-With" "XMLHttpRequest"
+    ]
 
 
 {-| JSON Decoders for parsing an HTTP response body.
 -}
-type alias ResponseDecoder error value =
-  { success : Decoder value
-  , failure : Decoder error
-  }
+type alias ResponseDecoder error success =
+    { success : Decoder success
+    , failure : Decoder error
+    }
 
 
-{-| Returns a decoder suitable for passing to `fromJson`, which uses the same decoder for both success and failure responses.
+{-| Returns a `ResponseDecoder` which uses the same decoder for both success and
+failures.
 -}
-always : Decoder value -> ResponseDecoder value value
+always : Decoder success -> ResponseDecoder success success
 always decoder =
-  ResponseDecoder decoder decoder
+    ResponseDecoder decoder decoder
 
 
-{-| Returns a decoder suitable for passing to `fromJson`.
+{-| Returns a `ResponseDecoder`.
 -}
-decoder : Decoder value -> Decoder error -> ResponseDecoder error value
+decoder : Decoder success -> Decoder error -> ResponseDecoder error success
 decoder successDecoder failureDecoder =
-  ResponseDecoder successDecoder failureDecoder
-
-
-{-| Think `Http.fromJson`, but with additional effort to parse a non-20x response as JSON.
-
-  * If the status code is in the 200 range, try to parse with the given `decoder.success`.
-    * If parsing fails, return an `Http.UnexpectedPayload` wrapped in `HttpError`
-  * If the status code is outside the 200 range, try to parse with the given `decoder.success`.
-    * If parsing fails, return an `Http.BadResponse` wrapped in `HttpError`
--}
-fromJson : ResponseDecoder error value -> Task Http.RawError Http.Response -> Task (Error error) value
-fromJson decoder response =
-  let
-    onSuccess response str =
-      case decodeString decoder.success str of
-        Ok v ->
-          succeed v
-
-        Err msg ->
-          fail (HttpError <| Http.UnexpectedPayload str)
-
-    onError response str =
-      case decodeString decoder.failure str of
-        Ok v ->
-          fail (RailsError v)
-
-        Err msg ->
-          fail (HttpError <| Http.BadResponse response.status response.statusText)
-
-    promoteError rawError =
-      case rawError of
-        Http.RawTimeout ->
-          HttpError Http.Timeout
-
-        Http.RawNetworkError ->
-          HttpError Http.NetworkError
-  in
-    mapError promoteError response
-      `andThen` handleResponse onSuccess onError
-
-
-type alias ResponseHandler error a =
-  Http.Response -> String -> Task (Error error) a
-
-
-handleResponse : ResponseHandler error a -> ResponseHandler error a -> Http.Response -> Task (Error error) a
-handleResponse onSuccess onError response =
-  let
-    unexpectedPayloadError =
-      HttpError (Http.UnexpectedPayload "Response body is a blob, expecting a string.")
-  in
-    case 200 <= response.status && response.status < 300 of
-      True ->
-        case response.value of
-          Http.Text str ->
-            onSuccess response str
-
-          _ ->
-            fail unexpectedPayloadError
-
-      False ->
-        case response.value of
-          Http.Text str ->
-            onError response str
-
-          _ ->
-            fail unexpectedPayloadError
+    ResponseDecoder successDecoder failureDecoder
 
 
 {-| If there was a `<meta name="csrf-token">` tag in the page's `<head>` when
@@ -209,11 +242,29 @@ handleResponse onSuccess onError response =
     Rails expects this value in the `X-CSRF-Token` header for non-`GET` requests as
     a [CSRF countermeasure](http://guides.rubyonrails.org/security.html#csrf-countermeasures).
 -}
-csrfToken : Maybe String
+csrfToken : Result String String
 csrfToken =
-  Native.Rails.csrfToken
+    Native.Rails.csrfToken
 
 
-(=>) : a -> a -> ( a, a )
-(=>) =
-  (,)
+{-| Think `Http.fromJson`, but with additional effort to parse a non-20x response as JSON.
+
+  * If the status code is in the 200 range, try to parse with the given `decoder.success`.
+  * If that succeeds, the result is `Ok` with the result.
+  * If the status code is outside the 200 range, try to parse with the given `decoder.failure`.
+  * If that succeeds, the result is `Err` with the result.
+  * If either parsing fails, the request as a whole fails.
+-}
+expectRailsJson : ResponseDecoder error success -> Expect (Result error success)
+expectRailsJson responseDecoder =
+    let
+        fromResponse : Response String -> Result String (Result error success)
+        fromResponse { status, body } =
+            if status.code >= 200 && status.code < 300 then
+                Json.Decode.decodeString responseDecoder.success body
+                    |> Result.map Ok
+            else
+                Json.Decode.decodeString responseDecoder.failure body
+                    |> Result.map Err
+    in
+        Http.expectStringResponse fromResponse
