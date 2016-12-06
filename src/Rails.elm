@@ -1,9 +1,9 @@
-module Rails exposing (Error(..), get, post, send, always, decoder, csrfToken, request, expectRailsJson)
+module Rails exposing (Error(..), get, post, put, delete, send, always, decoder, csrfToken, request, expectRailsJson)
 
 {-|
 
 ## Requests
-@docs Error, get, post, send, request
+@docs Error, get, post, put, delete, send, request
 
 ## Decoding
 @docs decoder, always
@@ -124,6 +124,60 @@ post : String -> Http.Body -> ResponseDecoder error success -> Request (Result e
 post url body responseDecoder =
     request
         { method = "POST"
+        , headers = []
+        , url = url
+        , body = body
+        , expect = expectRailsJson responseDecoder
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
+
+{-| Send a PUT request to the given URL. Specify how to decode the response.
+
+    import Json.Decode exposing (list, string, succeed)
+    import Http
+    import Rails
+
+
+    hats : Cmd msg
+    hats =
+        Rails.decoder (list string) (succeed ())
+            |> Rails.put "http://example.com/hat-categories/5" revisedHatData
+            |> Rails.send HandleResponse
+
+-}
+put : String -> Http.Body -> ResponseDecoder error success -> Request (Result error success)
+put url body responseDecoder =
+    request
+        { method = "PUT"
+        , headers = []
+        , url = url
+        , body = body
+        , expect = expectRailsJson responseDecoder
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
+
+{-| Send a DELETE request to the given URL. Specify how to decode the response.
+
+    import Json.Decode exposing (list, string, succeed)
+    import Http
+    import Rails
+
+
+    hats : Cmd msg
+    hats =
+        Rails.decoder (list string) (succeed ())
+            |> Rails.delete "http://example.com/hat-categories/5" Http.emptyBody
+            |> Rails.send HandleResponse
+
+-}
+delete : String -> Http.Body -> ResponseDecoder error success -> Request (Result error success)
+delete url body responseDecoder =
+    request
+        { method = "DELETE"
         , headers = []
         , url = url
         , body = body
