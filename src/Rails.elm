@@ -1,9 +1,9 @@
-module Rails exposing (Error, get, post, put, delete, send, csrfToken, request)
+module Rails exposing (Error, get, post, put, delete, decodeErrors, csrfToken, request)
 
 {-|
 
 ## Requests
-@docs Error, get, post, put, delete, send, request
+@docs Error, get, post, put, delete, decodeErrors, request
 
 ## Customizing
 @docs csrfToken
@@ -29,66 +29,6 @@ type alias Error error =
     }
 
 
-{-| Send an HTTP request to Rails. This uses [`request`](#request) under the
-hood, which means that a CSRF token will automatically be passed, among
-other things.
-
-The given decoder will be used to decode Rails-specific error information if the
-response has a status code outside the 200 range.
-
-    import Dict
-    import Json.Decode exposing (list, string)
-    import Json.Encode as Encode
-    import Http
-    import Rails.Decode
-    import Rails
-
-
-    requestHats : HatStyle -> Cmd Msg
-    requestHats style =
-        let
-            body =
-                [ ( "style", encodeHatStyle style ) ]
-                    |> Encode.object
-                    |> Http.jsonBody
-
-            success =
-                list string
-
-            failure =
-                Dict.fromList [ ( "style", HatStyle ) ]
-                    |> Rails.Decode.errors
-        in
-            Rails.decoder success failure
-                |> Rails.post url body
-                |> Rails.send HandleResponse
--}
-send : Decoder error -> (Result (Error error) success -> msg) -> Request success -> Cmd msg
-send errorDecoder toMsg req =
-    let
-        newToMsg result =
-            toMsg <|
-                case result of
-                    Err ((Http.BadStatus { body }) as httpError) ->
-                        Err
-                            { http = httpError
-                            , rails =
-                                Json.Decode.decodeString errorDecoder body
-                                    |> Result.toMaybe
-                            }
-
-                    Err httpError ->
-                        Err
-                            { http = httpError
-                            , rails = Nothing
-                            }
-
-                    Ok success ->
-                        Ok success
-    in
-        Http.send newToMsg req
-
-
 {-| Send a GET request to the given URL. Specify how to decode the response.
 
     import Json.Decode exposing (list, string, succeed)
@@ -100,7 +40,7 @@ send errorDecoder toMsg req =
     getHats =
         list hatDecoder
             |> Rails.get "http://example.com/hat-categories.json"
-            |> Rails.send (list string) HandleGetHatsResponse
+            |> Http.send HandleGetHatsResponse
 -}
 get : String -> Decoder val -> Request val
 get url decoder =
@@ -126,7 +66,7 @@ get url decoder =
     hats =
         list hatDecoder
             |> Rails.post "http://example.com/hat-categories/new" Http.emptyBody
-            |> Rails.send (list string) HandleResponse
+            |> Http.send HandleResponse
 
 -}
 post : String -> Http.Body -> Decoder val -> Request val
@@ -153,7 +93,7 @@ post url body decoder =
     hats =
         list hatDecoder
             |> Rails.put "http://example.com/hat-categories/5" revisedHatData
-            |> Rails.send (list string) HandleResponse
+            |> Http.send HandleResponse
 
 -}
 put : String -> Http.Body -> Decoder val -> Request val
@@ -180,7 +120,7 @@ put url body decoder =
     hats =
         list hatDecoder
             |> Rails.delete "http://example.com/hat-categories/5" Http.emptyBody
-            |> Rails.send (list string) HandleResponse
+            |> Http.send HandleResponse
 
 -}
 delete : String -> Http.Body -> Decoder val -> Request val
@@ -220,20 +160,13 @@ You can specify additional headers in the `headers` field of the configuration r
                 [ ( "style", encodeHatStyle style ) ]
                     |> Encode.object
                     |> Http.jsonBody
-
-            success =
-                list string
-
-            failure =
-                Dict.fromList [ ( "style", HatStyle ) ]
-                    |> Rails.Decode.errors
         in
             Rails.request
                 { method = "POST"
                 , headers = []
                 , url = url
                 , body = body
-                , expect = Http.expectJson (Rails.decoder success failure)
+                , expect = Http.expectJson (list string)
                 , timeout = Nothing
                 , withCredentials = False
                 }
@@ -276,6 +209,57 @@ defaultRequestHeaders =
     [ Http.header "Accept" "application/json, text/javascript, */*; q=0.01"
     , Http.header "X-Requested-With" "XMLHttpRequest"
     ]
+
+
+{-| Decode Rails-specific error information from a [`BadStatus`](http://package.elm-lang.org/packages/elm-lang/http/latest/Http#Error)
+response. (That is, a response whose status code is outside the 200 range.)
+
+This is intended to be used with [`Http.send`](http://package.elm-lang.org/packages/elm-lang/http/1.0.0/Http#send)
+like so:
+
+    import Dict
+    import Json.Decode exposing (list, string, at)
+    import Json.Encode as Encode
+    import Http
+    import Rails.Decode
+    import Rails
+
+
+    requestHats : HatStyle -> Cmd Msg
+    requestHats style =
+        let
+            body =
+                [ ( "style", encodeHatStyle style ) ]
+                    |> Encode.object
+                    |> Http.jsonBody
+
+            getErrors =
+                at [ "errors", "style" ] string
+                    |> Rails.decodeErrors
+        in
+            list string
+                |> Rails.post url body
+                |> Http.send (getErrors >> HandleResponse)
+-}
+decodeErrors : Decoder railsError -> Result Http.Error success -> Result (Error railsError) success
+decodeErrors errorDecoder result =
+    case result of
+        Err ((Http.BadStatus { body }) as httpError) ->
+            Err
+                { http = httpError
+                , rails =
+                    Json.Decode.decodeString errorDecoder body
+                        |> Result.toMaybe
+                }
+
+        Err httpError ->
+            Err
+                { http = httpError
+                , rails = Nothing
+                }
+
+        Ok success ->
+            Ok success
 
 
 {-| If there was a `<meta name="csrf-token">` tag in the page's `<head>` when
