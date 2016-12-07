@@ -194,6 +194,8 @@ delete url body responseDecoder =
 * `Accept` - `"application/json, text/javascript, */*; q=0.01"`
 * `X-Requested-With` - `"XMLHttpRequest"`
 
+You can specify additional headers in the `headers` field of the configuration record.
+
     import Dict
     import Json.Decode exposing (list, string)
     import Json.Encode as Encode
