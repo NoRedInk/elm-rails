@@ -1,15 +1,12 @@
-module Rails exposing (Error(..), get, post, put, delete, send, always, decoder, csrfToken, request, expectRailsJson)
+module Rails exposing (Error, get, post, put, delete, send, csrfToken, request)
 
 {-|
 
 ## Requests
 @docs Error, get, post, put, delete, send, request
 
-## Decoding
-@docs decoder, always
-
 ## Customizing
-@docs csrfToken, expectRailsJson
+@docs csrfToken
 
 -}
 
@@ -26,15 +23,18 @@ import Native.Rails
 
 {-| The kinds of errors a Rails server may return.
 -}
-type Error error
-    = HttpError Http.Error
-    | RailsError error
+type alias Error error =
+    { http : Http.Error
+    , rails : Maybe error
+    }
 
 
 {-| Send an HTTP request to Rails. This uses [`request`](#request) under the
 hood, which means that a CSRF token will automatically be passed, among
-other things. The Error handler uses a [`Rails.Error`](#Error), which includes
-more information than the standard `Http.Error`.
+other things.
+
+The given decoder will be used to decode Rails-specific error information if the
+response has a status code outside the 200 range.
 
     import Dict
     import Json.Decode exposing (list, string)
@@ -63,19 +63,28 @@ more information than the standard `Http.Error`.
                 |> Rails.post url body
                 |> Rails.send HandleResponse
 -}
-send : (Result (Error error) success -> msg) -> Request (Result error success) -> Cmd msg
-send toMsg req =
+send : Decoder error -> (Result (Error error) success -> msg) -> Request success -> Cmd msg
+send errorDecoder toMsg req =
     let
         newToMsg result =
-            case result of
-                Err err ->
-                    toMsg (Err (HttpError err))
+            toMsg <|
+                case result of
+                    Err ((Http.BadStatus { body }) as httpError) ->
+                        Err
+                            { http = httpError
+                            , rails =
+                                Json.Decode.decodeString errorDecoder body
+                                    |> Result.toMaybe
+                            }
 
-                Ok (Err railsError) ->
-                    toMsg (Err (RailsError railsError))
+                    Err httpError ->
+                        Err
+                            { http = httpError
+                            , rails = Nothing
+                            }
 
-                Ok (Ok success) ->
-                    toMsg (Ok success)
+                    Ok success ->
+                        Ok success
     in
         Http.send newToMsg req
 
@@ -89,18 +98,18 @@ send toMsg req =
 
     getHats : Cmd msg
     getHats =
-        Rails.decoder (list string) (succeed ())
+        list hatDecoder
             |> Rails.get "http://example.com/hat-categories.json"
-            |> Rails.send HandleGetHatsResponse
+            |> Rails.send (list string) HandleGetHatsResponse
 -}
-get : String -> ResponseDecoder error success -> Request (Result error success)
-get url responseDecoder =
+get : String -> Decoder val -> Request val
+get url decoder =
     request
         { method = "GET"
         , headers = []
         , url = url
         , body = Http.emptyBody
-        , expect = expectRailsJson responseDecoder
+        , expect = Http.expectJson decoder
         , timeout = Nothing
         , withCredentials = False
         }
@@ -115,19 +124,19 @@ get url responseDecoder =
 
     hats : Cmd msg
     hats =
-        Rails.decoder (list string) (succeed ())
+        list hatDecoder
             |> Rails.post "http://example.com/hat-categories/new" Http.emptyBody
-            |> Rails.send HandleResponse
+            |> Rails.send (list string) HandleResponse
 
 -}
-post : String -> Http.Body -> ResponseDecoder error success -> Request (Result error success)
-post url body responseDecoder =
+post : String -> Http.Body -> Decoder val -> Request val
+post url body decoder =
     request
         { method = "POST"
         , headers = []
         , url = url
         , body = body
-        , expect = expectRailsJson responseDecoder
+        , expect = Http.expectJson decoder
         , timeout = Nothing
         , withCredentials = False
         }
@@ -142,19 +151,19 @@ post url body responseDecoder =
 
     hats : Cmd msg
     hats =
-        Rails.decoder (list string) (succeed ())
+        list hatDecoder
             |> Rails.put "http://example.com/hat-categories/5" revisedHatData
-            |> Rails.send HandleResponse
+            |> Rails.send (list string) HandleResponse
 
 -}
-put : String -> Http.Body -> ResponseDecoder error success -> Request (Result error success)
-put url body responseDecoder =
+put : String -> Http.Body -> Decoder val -> Request val
+put url body decoder =
     request
         { method = "PUT"
         , headers = []
         , url = url
         , body = body
-        , expect = expectRailsJson responseDecoder
+        , expect = Http.expectJson decoder
         , timeout = Nothing
         , withCredentials = False
         }
@@ -169,19 +178,19 @@ put url body responseDecoder =
 
     hats : Cmd msg
     hats =
-        Rails.decoder (list string) (succeed ())
+        list hatDecoder
             |> Rails.delete "http://example.com/hat-categories/5" Http.emptyBody
-            |> Rails.send HandleResponse
+            |> Rails.send (list string) HandleResponse
 
 -}
-delete : String -> Http.Body -> ResponseDecoder error success -> Request (Result error success)
-delete url body responseDecoder =
+delete : String -> Http.Body -> Decoder val -> Request val
+delete url body decoder =
     request
         { method = "DELETE"
         , headers = []
         , url = url
         , body = body
-        , expect = expectRailsJson responseDecoder
+        , expect = Http.expectJson decoder
         , timeout = Nothing
         , withCredentials = False
         }
@@ -224,7 +233,7 @@ You can specify additional headers in the `headers` field of the configuration r
                 , headers = []
                 , url = url
                 , body = body
-                , expect = expectRailsJson (Rails.decoder success failure)
+                , expect = Http.expectJson (Rails.decoder success failure)
                 , timeout = Nothing
                 , withCredentials = False
                 }
@@ -269,29 +278,6 @@ defaultRequestHeaders =
     ]
 
 
-{-| JSON Decoders for parsing an HTTP response body.
--}
-type alias ResponseDecoder error success =
-    { success : Decoder success
-    , failure : Decoder error
-    }
-
-
-{-| Returns a `ResponseDecoder` which uses the same decoder for both success and
-failures.
--}
-always : Decoder success -> ResponseDecoder success success
-always decoder =
-    ResponseDecoder decoder decoder
-
-
-{-| Returns a `ResponseDecoder`.
--}
-decoder : Decoder success -> Decoder error -> ResponseDecoder error success
-decoder successDecoder failureDecoder =
-    ResponseDecoder successDecoder failureDecoder
-
-
 {-| If there was a `<meta name="csrf-token">` tag in the page's `<head>` when
     elm-rails loaded, returns the value its `content` attribute had at that time.
 
@@ -301,26 +287,3 @@ decoder successDecoder failureDecoder =
 csrfToken : Result String String
 csrfToken =
     Native.Rails.csrfToken
-
-
-{-| Think `Http.fromJson`, but with additional effort to parse a non-20x response as JSON.
-
-  * If the status code is in the 200 range, try to parse with the given `decoder.success`.
-  * If that succeeds, the result is `Ok` with the result.
-  * If the status code is outside the 200 range, try to parse with the given `decoder.failure`.
-  * If that succeeds, the result is `Err` with the result.
-  * If either parsing fails, the request as a whole fails.
--}
-expectRailsJson : ResponseDecoder error success -> Expect (Result error success)
-expectRailsJson responseDecoder =
-    let
-        fromResponse : Response String -> Result String (Result error success)
-        fromResponse { status, body } =
-            if status.code >= 200 && status.code < 300 then
-                Json.Decode.decodeString responseDecoder.success body
-                    |> Result.map Ok
-            else
-                Json.Decode.decodeString responseDecoder.failure body
-                    |> Result.map Err
-    in
-        Http.expectStringResponse fromResponse
