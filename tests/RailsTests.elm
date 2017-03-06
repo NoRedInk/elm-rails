@@ -30,6 +30,19 @@ all =
                         |> Rails.decodeErrors Json.Decode.string
                         |> expectErr (.rails >> Expect.equal (Just "custom error"))
             ]
+        , describe "decodeRawErrors"
+            [ test "Parses the body of BadStatus errors" <|
+                \() ->
+                    Http.BadStatus
+                        { url = ""
+                        , status = { code = 400, message = "" }
+                        , headers = Dict.empty
+                        , body = "\"custom error\""
+                        }
+                        |> Rails.decodeRawErrors Json.Decode.string
+                        |> .rails
+                        |> Expect.equal (Just "custom error")
+            ]
         ]
 
 

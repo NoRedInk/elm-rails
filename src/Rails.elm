@@ -1,9 +1,9 @@
-module Rails exposing (Error, get, post, put, delete, decodeErrors, csrfToken, request)
+module Rails exposing (Error, get, post, put, delete, decodeErrors, decodeRawErrors, csrfToken, request)
 
 {-|
 
 ## Requests
-@docs Error, get, post, put, delete, decodeErrors, request
+@docs Error, get, post, put, delete, decodeErrors, decodeRawErrors, request
 
 ## Customizing
 @docs csrfToken
@@ -243,23 +243,28 @@ like so:
 -}
 decodeErrors : Decoder railsError -> Result Http.Error success -> Result (Error railsError) success
 decodeErrors errorDecoder result =
-    case result of
-        Err ((Http.BadStatus { body }) as httpError) ->
-            Err
-                { http = httpError
-                , rails =
-                    Json.Decode.decodeString errorDecoder body
-                        |> Result.toMaybe
-                }
+    Result.mapError (decodeRawErrors errorDecoder) result
 
-        Err httpError ->
-            Err
-                { http = httpError
-                , rails = Nothing
-                }
 
-        Ok success ->
-            Ok success
+{-| Decode Rails-specific error information from a [`BadStatus`](http://package.elm-lang.org/packages/elm-lang/http/latest/Http#Error)
+response. (That is, a response whose status code is outside the 200 range.)
+
+See also, `decodeErrors`.
+-}
+decodeRawErrors : Decoder railsError -> Http.Error -> Error railsError
+decodeRawErrors errorDecoder httpError =
+    case httpError of
+        Http.BadStatus { body } ->
+            { http = httpError
+            , rails =
+                Json.Decode.decodeString errorDecoder body
+                    |> Result.toMaybe
+            }
+
+        _ ->
+            { http = httpError
+            , rails = Nothing
+            }
 
 
 {-| If there was a `<meta name="csrf-token">` tag in the page's `<head>` when
