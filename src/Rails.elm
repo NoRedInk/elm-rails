@@ -1,9 +1,9 @@
-module Rails exposing (Error, get, post, put, delete, decodeErrors, decodeRawErrors, csrfToken, request)
+module Rails exposing (Error, get, post, put, patch, delete, decodeErrors, decodeRawErrors, csrfToken, request)
 
 {-|
 
 ## Requests
-@docs Error, get, post, put, delete, decodeErrors, decodeRawErrors, request
+@docs Error, get, post, put, patch, delete, decodeErrors, decodeRawErrors, request
 
 ## Customizing
 @docs csrfToken
@@ -100,6 +100,33 @@ put : String -> Http.Body -> Decoder val -> Request val
 put url body decoder =
     request
         { method = "PUT"
+        , headers = []
+        , url = url
+        , body = body
+        , expect = Http.expectJson decoder
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
+
+{-| Send a PATCH request to the given URL. Specify how to decode the response.
+
+    import Json.Decode exposing (list, string, succeed)
+    import Http
+    import Rails
+
+
+    hats : Cmd msg
+    hats =
+        list hatDecoder
+            |> Rails.patch "http://example.com/hat-categories/5" revisedHatData
+            |> Http.send HandleResponse
+
+-}
+patch : String -> Http.Body -> Decoder val -> Request val
+patch url body decoder =
+    request
+        { method = "PATCH"
         , headers = []
         , url = url
         , body = body
