@@ -1,4 +1,4 @@
-module Rails exposing (Error, csrfToken, decodeErrors, decodeRawErrors, delete, get, patch, post, put, request)
+module Rails exposing (Error, decodeErrors, decodeRawErrors, delete, get, patch, post, put, request)
 
 {-|
 
@@ -7,16 +7,10 @@ module Rails exposing (Error, csrfToken, decodeErrors, decodeRawErrors, delete, 
 
 @docs Error, get, post, put, patch, delete, decodeErrors, decodeRawErrors, request
 
-
-## Customizing
-
-@docs csrfToken
-
 -}
 
 import Http exposing (Body, Expect, Header, Request, Response)
 import Json.Decode exposing (Decoder, decodeString)
-import Native.Rails
 import Result exposing (Result)
 import Time exposing (Time)
 
@@ -164,7 +158,6 @@ delete url body decoder =
 
 {-| Wraps `Http.request` while adding the following default headers:
 
-  - `X-CSRF-Token` - set to `csrfToken` if it's an `Ok` and this request isn't a `GET`
   - `Content-Type` - `"application/json"`
   - `Accept` - `"application/json, text/javascript, */*; q=0.01"`
   - `X-Requested-With` - `"XMLHttpRequest"`
@@ -209,21 +202,9 @@ request :
     -> Request a
 request options =
     let
-        csrfTokenHeaders =
-            if String.toUpper options.method == "GET" then
-                []
-            else
-                case csrfToken of
-                    Err _ ->
-                        []
-
-                    Ok csrfTokenString ->
-                        [ Http.header "X-CSRF-Token" csrfTokenString ]
-
         headers =
             List.concat
                 [ defaultRequestHeaders
-                , csrfTokenHeaders
                 , options.headers
                 ]
     in
@@ -292,15 +273,3 @@ decodeRawErrors errorDecoder httpError =
             { http = httpError
             , rails = Nothing
             }
-
-
-{-| If there was a `<meta name="csrf-token">` tag in the page's `<head>` when
-elm-rails loaded, returns the value its `content` attribute had at that time.
-
-    Rails expects this value in the `X-CSRF-Token` header for non-`GET` requests as
-    a [CSRF countermeasure](http://guides.rubyonrails.org/security.html#csrf-countermeasures).
-
--}
-csrfToken : Result String String
-csrfToken =
-    Native.Rails.csrfToken
