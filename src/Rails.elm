@@ -1,21 +1,25 @@
-module Rails exposing (Error, get, post, put, patch, delete, decodeErrors, decodeRawErrors, csrfToken, request)
+module Rails exposing (Error, csrfToken, decodeErrors, decodeRawErrors, delete, get, patch, post, put, request)
 
 {-|
 
+
 ## Requests
+
 @docs Error, get, post, put, patch, delete, decodeErrors, decodeRawErrors, request
 
+
 ## Customizing
+
 @docs csrfToken
 
 -}
 
-import Http exposing (Request, Response, Body, Expect, Header)
-import Time exposing (Time)
+import Http exposing (Body, Expect, Header, Request, Response)
 import Json.Decode exposing (Decoder, decodeString)
+import Native.Rails
 import Result exposing (Result)
 import String
-import Native.Rails
+import Time exposing (Time)
 
 
 -- Http
@@ -31,16 +35,16 @@ type alias Error error =
 
 {-| Send a GET request to the given URL. Specify how to decode the response.
 
-    import Json.Decode exposing (list, string, succeed)
     import Http
+    import Json.Decode exposing (list, string, succeed)
     import Rails
-
 
     getHats : Cmd msg
     getHats =
         list hatDecoder
             |> Rails.get "http://example.com/hat-categories.json"
             |> Http.send HandleGetHatsResponse
+
 -}
 get : String -> Decoder val -> Request val
 get url decoder =
@@ -57,10 +61,9 @@ get url decoder =
 
 {-| Send a POST request to the given URL. Specify how to decode the response.
 
-    import Json.Decode exposing (list, string, succeed)
     import Http
+    import Json.Decode exposing (list, string, succeed)
     import Rails
-
 
     hats : Cmd msg
     hats =
@@ -84,10 +87,9 @@ post url body decoder =
 
 {-| Send a PUT request to the given URL. Specify how to decode the response.
 
-    import Json.Decode exposing (list, string, succeed)
     import Http
+    import Json.Decode exposing (list, string, succeed)
     import Rails
-
 
     hats : Cmd msg
     hats =
@@ -111,10 +113,9 @@ put url body decoder =
 
 {-| Send a PATCH request to the given URL. Specify how to decode the response.
 
-    import Json.Decode exposing (list, string, succeed)
     import Http
+    import Json.Decode exposing (list, string, succeed)
     import Rails
-
 
     hats : Cmd msg
     hats =
@@ -138,10 +139,9 @@ patch url body decoder =
 
 {-| Send a DELETE request to the given URL. Specify how to decode the response.
 
-    import Json.Decode exposing (list, string, succeed)
     import Http
+    import Json.Decode exposing (list, string, succeed)
     import Rails
-
 
     hats : Cmd msg
     hats =
@@ -165,20 +165,19 @@ delete url body decoder =
 
 {-| Wraps `Http.request` while adding the following default headers:
 
-* `X-CSRF-Token` - set to `csrfToken` if it's an `Ok` and this request isn't a `GET`
-* `Content-Type` - `"application/json"`
-* `Accept` - `"application/json, text/javascript, */*; q=0.01"`
-* `X-Requested-With` - `"XMLHttpRequest"`
+  - `X-CSRF-Token` - set to `csrfToken` if it's an `Ok` and this request isn't a `GET`
+  - `Content-Type` - `"application/json"`
+  - `Accept` - `"application/json, text/javascript, */*; q=0.01"`
+  - `X-Requested-With` - `"XMLHttpRequest"`
 
 You can specify additional headers in the `headers` field of the configuration record.
 
     import Dict
+    import Http
     import Json.Decode exposing (list, string)
     import Json.Encode as Encode
-    import Http
-    import Rails.Decode
     import Rails
-
+    import Rails.Decode
 
     hatRequest : HatStyle -> Request (Result (ErrorList Field) Hat)
     hatRequest style =
@@ -188,15 +187,16 @@ You can specify additional headers in the `headers` field of the configuration r
                     |> Encode.object
                     |> Http.jsonBody
         in
-            Rails.request
-                { method = "POST"
-                , headers = []
-                , url = url
-                , body = body
-                , expect = Http.expectJson (list string)
-                , timeout = Nothing
-                , withCredentials = False
-                }
+        Rails.request
+            { method = "POST"
+            , headers = []
+            , url = url
+            , body = body
+            , expect = Http.expectJson (list string)
+            , timeout = Nothing
+            , withCredentials = False
+            }
+
 -}
 request :
     { method : String
@@ -211,7 +211,7 @@ request :
 request options =
     let
         csrfTokenHeaders =
-            if (String.toUpper options.method) == "GET" then
+            if String.toUpper options.method == "GET" then
                 []
             else
                 case csrfToken of
@@ -228,7 +228,7 @@ request options =
                 , options.headers
                 ]
     in
-        Http.request { options | headers = headers }
+    Http.request { options | headers = headers }
 
 
 defaultRequestHeaders : List Header
@@ -245,12 +245,11 @@ This is intended to be used with [`Http.send`](http://package.elm-lang.org/packa
 like so:
 
     import Dict
-    import Json.Decode exposing (list, string, at)
-    import Json.Encode as Encode
     import Http
-    import Rails.Decode
+    import Json.Decode exposing (at, list, string)
+    import Json.Encode as Encode
     import Rails
-
+    import Rails.Decode
 
     requestHats : HatStyle -> Cmd Msg
     requestHats style =
@@ -264,9 +263,10 @@ like so:
                 at [ "errors", "style" ] string
                     |> Rails.decodeErrors
         in
-            list string
-                |> Rails.post url body
-                |> Http.send (getErrors >> HandleResponse)
+        list string
+            |> Rails.post url body
+            |> Http.send (getErrors >> HandleResponse)
+
 -}
 decodeErrors : Decoder railsError -> Result Http.Error success -> Result (Error railsError) success
 decodeErrors errorDecoder result =
@@ -277,6 +277,7 @@ decodeErrors errorDecoder result =
 response. (That is, a response whose status code is outside the 200 range.)
 
 See also, `decodeErrors`.
+
 -}
 decodeRawErrors : Decoder railsError -> Http.Error -> Error railsError
 decodeRawErrors errorDecoder httpError =
@@ -295,10 +296,11 @@ decodeRawErrors errorDecoder httpError =
 
 
 {-| If there was a `<meta name="csrf-token">` tag in the page's `<head>` when
-    elm-rails loaded, returns the value its `content` attribute had at that time.
+elm-rails loaded, returns the value its `content` attribute had at that time.
 
     Rails expects this value in the `X-CSRF-Token` header for non-`GET` requests as
     a [CSRF countermeasure](http://guides.rubyonrails.org/security.html#csrf-countermeasures).
+
 -}
 csrfToken : Result String String
 csrfToken =

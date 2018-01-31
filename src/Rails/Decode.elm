@@ -1,28 +1,29 @@
-module Rails.Decode exposing (errors, ErrorList)
+module Rails.Decode exposing (ErrorList, errors)
 
-{-|
-
-Types
+{-| Types
 @docs ErrorList
 
+
 # Decoding
+
 @docs errors
 
 -}
 
+import Dict
 import Json.Decode as Decode exposing (Decoder, field)
 import Result exposing (Result)
-import Dict
 
 
 {-| ErrorList is a type alias for a list of `( fields, String )` pairs,
 where `field` is a type we can use to reference which fields had errors.
 
-```
-type Field = Name | Password
+    type Field
+        = Name
+        | Password
 
-decode : ErrorList Field
-```
+    decode : ErrorList Field
+
 -}
 type alias ErrorList field =
     List ( field, String )
@@ -39,17 +40,16 @@ type alias ErrorList field =
 This function takes a Dict that is a map of all the fields you need decoded.
 It should look like this:
 
-```
-Dict.fromList
-    [ ( "school", School )
-    , ( "school.name", SchoolName )
-    , ( "school.address", SchoolAddress )
-    , ( "school.city", City )
-    , ( "school.state", State )
-    , ( "school.zip", Zip )
-    , ( "school.country", Country )
-    ]
-```
+    Dict.fromList
+        [ ( "school", School )
+        , ( "school.name", SchoolName )
+        , ( "school.address", SchoolAddress )
+        , ( "school.city", City )
+        , ( "school.state", State )
+        , ( "school.zip", Zip )
+        , ( "school.country", Country )
+        ]
+
 -}
 errors : Dict.Dict String field -> Decoder (ErrorList field)
 errors mappings =
@@ -85,12 +85,12 @@ errors mappings =
                             Decode.decodeString (fieldDecoderFor fieldName) ("\"" ++ fieldName ++ "\"")
                                 |> Result.map (tuplesFromField errors results)
                     in
-                        case newResults of
-                            Err err ->
-                                Decode.fail err
+                    case newResults of
+                        Err err ->
+                            Decode.fail err
 
-                            Ok newResultList ->
-                                toFinalDecoder newResultList others
+                        Ok newResultList ->
+                            toFinalDecoder newResultList others
 
         tuplesFromField : List String -> ErrorList field -> field -> ErrorList field
         tuplesFromField errors results field =
@@ -98,4 +98,4 @@ errors mappings =
                 |> List.map (\error -> ( field, error ))
                 |> List.append results
     in
-        field "errors" finalDecoder
+    field "errors" finalDecoder
