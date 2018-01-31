@@ -18,7 +18,6 @@ import Http exposing (Body, Expect, Header, Request, Response)
 import Json.Decode exposing (Decoder, decodeString)
 import Native.Rails
 import Result exposing (Result)
-import String
 import Time exposing (Time)
 
 
