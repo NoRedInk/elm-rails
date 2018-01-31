@@ -64,6 +64,11 @@ get url decoder =
             |> Rails.post "http://example.com/hat-categories/new" Http.emptyBody
             |> Http.send HandleResponse
 
+**NOTE:** Rails typically expects an `X-CSRF-Token` header for `POST`
+requests, which this does not include. To have this header included
+automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
+to the page, before your `Elm` program gets initialized.
+
 -}
 post : String -> Http.Body -> Decoder val -> Request val
 post url body decoder =
@@ -89,6 +94,11 @@ post url body decoder =
         list hatDecoder
             |> Rails.put "http://example.com/hat-categories/5" revisedHatData
             |> Http.send HandleResponse
+
+**NOTE:** Rails typically expects an `X-CSRF-Token` header for `PUT`
+requests, which this does not include. To have this header included
+automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
+to the page, before your `Elm` program gets initialized.
 
 -}
 put : String -> Http.Body -> Decoder val -> Request val
@@ -116,6 +126,11 @@ put url body decoder =
             |> Rails.patch "http://example.com/hat-categories/5" revisedHatData
             |> Http.send HandleResponse
 
+**NOTE:** Rails typically expects an `X-CSRF-Token` header for `PATCH`
+requests, which this does not include. To have this header included
+automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
+to the page, before your `Elm` program gets initialized.
+
 -}
 patch : String -> Http.Body -> Decoder val -> Request val
 patch url body decoder =
@@ -141,6 +156,11 @@ patch url body decoder =
         list hatDecoder
             |> Rails.delete "http://example.com/hat-categories/5" Http.emptyBody
             |> Http.send HandleResponse
+
+**NOTE:** Rails typically expects an `X-CSRF-Token` header for `DELETE`
+requests, which this does not include. To have this header included
+automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
+to the page, before your `Elm` program gets initialized.
 
 -}
 delete : String -> Http.Body -> Decoder val -> Request val
@@ -188,6 +208,11 @@ You can specify additional headers in the `headers` field of the configuration r
             , timeout = Nothing
             , withCredentials = False
             }
+
+**NOTE:** Rails typically expects an `X-CSRF-Token` header for requests other
+than `GET`, which this does not include. To have this header included
+automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
+to the page, before your `Elm` program gets initialized.
 
 -}
 request :
