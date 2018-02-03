@@ -1,4 +1,4 @@
-module Rails exposing (Error, csrfToken, decodeErrors, decodeRawErrors, delete, get, patch, post, put, request)
+module Rails exposing (Error, decodeErrors, decodeRawErrors, delete, get, patch, post, put, request)
 
 {-|
 
@@ -7,16 +7,10 @@ module Rails exposing (Error, csrfToken, decodeErrors, decodeRawErrors, delete, 
 
 @docs Error, get, post, put, patch, delete, decodeErrors, decodeRawErrors, request
 
-
-## Customizing
-
-@docs csrfToken
-
 -}
 
 import Http exposing (Body, Expect, Header, Request, Response)
 import Json.Decode exposing (Decoder, decodeString)
-import Native.Rails
 import Result exposing (Result)
 import Time exposing (Time)
 
@@ -70,6 +64,11 @@ get url decoder =
             |> Rails.post "http://example.com/hat-categories/new" Http.emptyBody
             |> Http.send HandleResponse
 
+**NOTE:** Rails typically expects an `X-CSRF-Token` header for `POST`
+requests, which this does not include. To have this header included
+automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
+to the page, before your `Elm` program gets initialized.
+
 -}
 post : String -> Http.Body -> Decoder val -> Request val
 post url body decoder =
@@ -95,6 +94,11 @@ post url body decoder =
         list hatDecoder
             |> Rails.put "http://example.com/hat-categories/5" revisedHatData
             |> Http.send HandleResponse
+
+**NOTE:** Rails typically expects an `X-CSRF-Token` header for `PUT`
+requests, which this does not include. To have this header included
+automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
+to the page, before your `Elm` program gets initialized.
 
 -}
 put : String -> Http.Body -> Decoder val -> Request val
@@ -122,6 +126,11 @@ put url body decoder =
             |> Rails.patch "http://example.com/hat-categories/5" revisedHatData
             |> Http.send HandleResponse
 
+**NOTE:** Rails typically expects an `X-CSRF-Token` header for `PATCH`
+requests, which this does not include. To have this header included
+automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
+to the page, before your `Elm` program gets initialized.
+
 -}
 patch : String -> Http.Body -> Decoder val -> Request val
 patch url body decoder =
@@ -148,6 +157,11 @@ patch url body decoder =
             |> Rails.delete "http://example.com/hat-categories/5" Http.emptyBody
             |> Http.send HandleResponse
 
+**NOTE:** Rails typically expects an `X-CSRF-Token` header for `DELETE`
+requests, which this does not include. To have this header included
+automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
+to the page, before your `Elm` program gets initialized.
+
 -}
 delete : String -> Http.Body -> Decoder val -> Request val
 delete url body decoder =
@@ -164,7 +178,6 @@ delete url body decoder =
 
 {-| Wraps `Http.request` while adding the following default headers:
 
-  - `X-CSRF-Token` - set to `csrfToken` if it's an `Ok` and this request isn't a `GET`
   - `Content-Type` - `"application/json"`
   - `Accept` - `"application/json, text/javascript, */*; q=0.01"`
   - `X-Requested-With` - `"XMLHttpRequest"`
@@ -196,6 +209,11 @@ You can specify additional headers in the `headers` field of the configuration r
             , withCredentials = False
             }
 
+**NOTE:** Rails typically expects an `X-CSRF-Token` header for requests other
+than `GET`, which this does not include. To have this header included
+automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
+to the page, before your `Elm` program gets initialized.
+
 -}
 request :
     { method : String
@@ -209,21 +227,9 @@ request :
     -> Request a
 request options =
     let
-        csrfTokenHeaders =
-            if String.toUpper options.method == "GET" then
-                []
-            else
-                case csrfToken of
-                    Err _ ->
-                        []
-
-                    Ok csrfTokenString ->
-                        [ Http.header "X-CSRF-Token" csrfTokenString ]
-
         headers =
             List.concat
                 [ defaultRequestHeaders
-                , csrfTokenHeaders
                 , options.headers
                 ]
     in
@@ -292,15 +298,3 @@ decodeRawErrors errorDecoder httpError =
             { http = httpError
             , rails = Nothing
             }
-
-
-{-| If there was a `<meta name="csrf-token">` tag in the page's `<head>` when
-elm-rails loaded, returns the value its `content` attribute had at that time.
-
-    Rails expects this value in the `X-CSRF-Token` header for non-`GET` requests as
-    a [CSRF countermeasure](http://guides.rubyonrails.org/security.html#csrf-countermeasures).
-
--}
-csrfToken : Result String String
-csrfToken =
-    Native.Rails.csrfToken
