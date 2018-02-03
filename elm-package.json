@@ -1,5 +1,5 @@
 {
-    "version": "6.2.0",
+    "version": "7.0.0",
     "summary": "Convenience functions for using Elm with Rails.",
     "repository": "https://github.com/NoRedInk/elm-rails.git",
     "license": "BSD-3-Clause",
