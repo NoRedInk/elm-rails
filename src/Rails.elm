@@ -1,4 +1,4 @@
-module Rails exposing (Error, decodeErrors, decodeRawErrors, delete, get, patch, post, put, request)
+module Rails exposing (Error, get, post, put, patch, delete, decodeErrors, decodeRawErrors, request)
 
 {-|
 
@@ -12,7 +12,7 @@ module Rails exposing (Error, decodeErrors, decodeRawErrors, delete, get, patch,
 import Http exposing (Body, Expect, Header, Request, Response)
 import Json.Decode exposing (Decoder, decodeString)
 import Result exposing (Result)
-import Time exposing (Time)
+
 
 
 -- Http
@@ -210,8 +210,8 @@ You can specify additional headers in the `headers` field of the configuration r
             }
 
 **NOTE:** Rails typically expects an `X-CSRF-Token` header for requests other
-than `GET`, which this does not include. To have this header included
-automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
+than `GET`, which this does not include. One way to have this header included
+automatically is to add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
 to the page, before your `Elm` program gets initialized.
 
 -}
@@ -221,7 +221,7 @@ request :
     , url : String
     , body : Body
     , expect : Expect a
-    , timeout : Maybe Time
+    , timeout : Maybe Float
     , withCredentials : Bool
     }
     -> Request a
