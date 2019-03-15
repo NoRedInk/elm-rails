@@ -1,6 +1,6 @@
 module Rails exposing
     ( get, post, put, patch, delete, request
-    , Expect, RailsError(..), expectJson, expectJsonErrors
+    , Expect, RailsResponse(..), expectString, expectEmptyBody, expectJson, expectJsonErrors
     )
 
 {-|
@@ -13,7 +13,7 @@ module Rails exposing
 
 ## Expectations
 
-@docs Expect, RailsError, expectJson, expectJsonErrors
+@docs Expect, RailsResponse, expectString, expectEmptyBody, expectJson, expectJsonErrors
 
 -}
 
@@ -27,15 +27,14 @@ import Json.Decode as Decode exposing (Decoder, decodeString)
 
 {-| Send a GET request to the given URL. Specify how to decode the response.
 
-    import Http
-    import Json.Decode exposing (list, string, succeed)
     import Rails
 
     getHats : Cmd msg
     getHats =
-        list hatDecoder
-            |> Rails.get "http://example.com/hat-categories.json"
-            |> Http.send HandleGetHatsResponse
+        Rails.get
+            { url = "https://example.com/hats"
+            , expect = Rails.expectJson HandleGetHatsResponse hatsDecoder
+            }
 
 -}
 get :
@@ -58,19 +57,20 @@ get { url, expect } =
 {-| Send a POST request to the given URL. Specify how to decode the response.
 
     import Http
-    import Json.Decode exposing (list, string, succeed)
     import Rails
 
-    hats : Cmd msg
-    hats =
-        list hatDecoder
-            |> Rails.post "http://example.com/hat-categories/new" Http.emptyBody
-            |> Http.send HandleResponse
+    createHat : Hat -> Cmd msg
+    createHat =
+        Rails.post
+            { url = "https://example.com/hats"
+            , body = Http.jsonBody (encodeHat hat)
+            , expect = Rails.expectJson HandleNewHatResponse hatDecoder
+            }
 
-**NOTE:** Rails typically expects an `X-CSRF-Token` header for `POST`
-requests, which this does not include. To have this header included
-automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
-to the page, before your `Elm` program gets initialized.
+**NOTE:** Rails typically expects an `X-CSRF-Token` header for `POST` requests,
+which this does not include. To have this header included automatically, add
+[`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr) to the page, before your
+`Elm` program gets initialized.
 
 -}
 post :
@@ -94,19 +94,20 @@ post { url, body, expect } =
 {-| Send a PUT request to the given URL. Specify how to decode the response.
 
     import Http
-    import Json.Decode exposing (list, string, succeed)
     import Rails
 
-    hats : Cmd msg
-    hats =
-        list hatDecoder
-            |> Rails.put "http://example.com/hat-categories/5" revisedHatData
-            |> Http.send HandleResponse
+    updateHat : Hat -> Cmd msg
+    updateHat hat =
+        Rails.put
+            { url = "https://example.com/hats/" ++ String.fromInt hat.id
+            , body = Http.jsonBody (encodeHat hat)
+            , expect = Rails.expectJson HandleUpdatedHatResponse hatDecoder
+            }
 
-**NOTE:** Rails typically expects an `X-CSRF-Token` header for `PUT`
-requests, which this does not include. To have this header included
-automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
-to the page, before your `Elm` program gets initialized.
+**NOTE:** Rails typically expects an `X-CSRF-Token` header for `PUT` requests,
+which this does not include. To have this header included automatically, add
+[`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr) to the page, before your
+`Elm` program gets initialized.
 
 -}
 put :
@@ -130,19 +131,21 @@ put { url, body, expect } =
 {-| Send a PATCH request to the given URL. Specify how to decode the response.
 
     import Http
-    import Json.Decode exposing (list, string, succeed)
+    import Json.Encode exposing (object, string)
     import Rails
 
-    hats : Cmd msg
-    hats =
-        list hatDecoder
-            |> Rails.patch "http://example.com/hat-categories/5" revisedHatData
-            |> Http.send HandleResponse
+    updateHatDescription : Int -> String -> Cmd msg
+    updateHatDescription id description =
+        Rails.patch
+            { url = "https://example.com/hats/" ++ String.fromInt hat.id
+            , body = Http.jsonBody (object [ ( "description", string description ) ])
+            , expect = Rails.expectJson HandleUpdatedHatResponse hatDecoder
+            }
 
-**NOTE:** Rails typically expects an `X-CSRF-Token` header for `PATCH`
-requests, which this does not include. To have this header included
-automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
-to the page, before your `Elm` program gets initialized.
+**NOTE:** Rails typically expects an `X-CSRF-Token` header for `PATCH` requests,
+which this does not include. To have this header included automatically, add
+[`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr) to the page, before your
+`Elm` program gets initialized.
 
 -}
 patch :
@@ -166,19 +169,20 @@ patch { url, body, expect } =
 {-| Send a DELETE request to the given URL. Specify how to decode the response.
 
     import Http
-    import Json.Decode exposing (list, string, succeed)
     import Rails
 
-    hats : Cmd msg
-    hats =
-        list hatDecoder
-            |> Rails.delete "http://example.com/hat-categories/5" Http.emptyBody
-            |> Http.send HandleResponse
+    destroyHat : Hat -> Cmd msg
+    destroyHat =
+        Rails.delete
+            { url = "https://example.com/hats/" ++ String.fromInt hat.id
+            , body = Http.emptyBody
+            , expect = Rails.expectEmptyBody HandleDeletedHatResponse
+            }
 
 **NOTE:** Rails typically expects an `X-CSRF-Token` header for `DELETE`
 requests, which this does not include. To have this header included
-automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
-to the page, before your `Elm` program gets initialized.
+automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr) to the
+page, before your `Elm` program gets initialized.
 
 -}
 delete :
@@ -201,40 +205,33 @@ delete { url, body, expect } =
 
 {-| Wraps `Http.request` while adding the following default headers:
 
-  - `Accept` - `"application/json, text/javascript, */*; q=0.01"`
+  - `Accept`
+      - for JSON: `"application/json, text/javascript, */*; q=0.01"`
+      - for string: `"*/*"`
   - `X-Requested-With` - `"XMLHttpRequest"`
 
 You can specify additional headers in the `headers` field of the configuration record.
+The `delete` example above would look lik this:
 
-    import Dict
     import Http
-    import Json.Decode exposing (list, string)
-    import Json.Encode as Encode
     import Rails
-    import Rails.Decode
 
-    hatRequest : HatStyle -> Request (Result (ErrorList Field) Hat)
-    hatRequest style =
-        let
-            body =
-                [ ( "style", encodeHatStyle style ) ]
-                    |> Encode.object
-                    |> Http.jsonBody
-        in
+    destroyHat : Hat -> Cmd msg
+    destroyHat =
         Rails.request
-            { method = "POST"
+            { method = "DELETE"
             , headers = []
-            , url = url
-            , body = body
-            , expect = Http.expectJson (list string)
+            , url = "https://example.com/hats/" ++ String.fromInt hat.id
+            , body = Http.emptyBody
+            , expect = Rails.expectEmptyBody HandleDeletedHatResponse
             , timeout = Nothing
-            , withCredentials = False
+            , tracker = Nothing
             }
 
 **NOTE:** Rails typically expects an `X-CSRF-Token` header for requests other
 than `GET`, which this does not include. One way to have this header included
-automatically is to add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
-to the page, before your `Elm` program gets initialized.
+automatically is to add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr) to
+the page, before your `Elm` program gets initialized.
 
 -}
 request :
@@ -252,7 +249,12 @@ request { method, headers, url, body, expect, timeout, tracker } =
         accept =
             case expect of
                 ExpectJson _ ->
+                    -- q indicates our preference, from 0 to 1. We almost never
+                    -- want a fallback, so we indicate that.
                     Http.header "Accept" "application/json, text/javascript, */*; q=0.01"
+
+                ExpectString _ ->
+                    Http.header "Accept" "*/*"
 
         requestedWith =
             Http.header "X-Requested-With" "XMLHttpRequest"
@@ -260,6 +262,9 @@ request { method, headers, url, body, expect, timeout, tracker } =
         unwrappedExpect =
             case expect of
                 ExpectJson inner ->
+                    inner
+
+                ExpectString inner ->
                     inner
     in
     Http.request
@@ -277,65 +282,80 @@ request { method, headers, url, body, expect, timeout, tracker } =
 -- EXPECTATIONS
 
 
+{-| Expect that the response body will look a certain way. Similar to
+[`Http.Expect`](https://package.elm-lang.org/packages/elm/http/2.0.0/Http#Expect),
+but wrapped here so we know what headers to set in requests.
+-}
 type Expect msg
     = ExpectJson (Http.Expect msg)
+    | ExpectString (Http.Expect msg)
 
 
-{-| The kinds of errors a Rails server may return.
+{-| The kinds of responses a Rails server may return.
 -}
-type RailsError error success
+type RailsResponse error success
     = Success success
     | HttpError Http.Error
     | AppError Http.Metadata error
 
 
-{-| TODO: docs
+{-| Expect Rails to return some string data. If this will be JSON, use
+[`expectJson`](#expectJson) instead!
+-}
+expectString : (Result Http.Error String -> msg) -> Expect msg
+expectString =
+    ExpectString << Http.expectString
+
+
+{-| Expect Rails to return an empty body. Note that we don't actually enforce
+the body is empty; we just discard it. Pairs well with [`delete`](#delete).
+-}
+expectEmptyBody : (Result Http.Error () -> msg) -> Expect msg
+expectEmptyBody toMsg =
+    ExpectString <| Http.expectString (Result.map (\_ -> ()) >> toMsg)
+
+
+{-| Expect Rails to return JSON.
 -}
 expectJson : (Result Http.Error msg -> msg) -> Decoder msg -> Expect msg
 expectJson toMsg decoder =
     ExpectJson <| Http.expectJson toMsg decoder
 
 
-{-| Decode Rails-specific error information from a [`BadStatus`](http://package.elm-lang.org/packages/elm-lang/http/latest/Http#Error)
-response. (That is, a response whose status code is outside the 200 range.)
-
-This is intended to be used with [`Http.send`](http://package.elm-lang.org/packages/elm-lang/http/1.0.0/Http#send)
-like so:
+{-| Decode Rails-specific error information from a
+[`BadStatus_`](https://package.elm-lang.org/packages/elm/http/2.0.0/Http#Response)
+response (that is, a response whose status code is outside the 200 range.)
 
     import Dict
     import Http
-    import Json.Decode exposing (at, list, string)
+    import Json.Decode exposing (at, string)
     import Json.Encode as Encode
     import Rails
     import Rails.Decode
 
-    requestHats : HatStyle -> Cmd Msg
-    requestHats style =
+    createHat : Hat -> Cmd Msg
+    createHat hat =
         let
-            body =
-                [ ( "style", encodeHatStyle style ) ]
-                    |> Encode.object
-                    |> Http.jsonBody
-
-            getErrors =
-                at [ "errors", "style" ] string
-                    |> Rails.decodeErrors
+            errorsDecoder =
+                Rails.Decode.decodeErrors (at [ "errors", "style" ] string)
         in
-        list string
-            |> Rails.post url body
-            |> Http.send (getErrors >> HandleResponse)
+        Rails.post
+            { url = "https://example.com/hats"
+            , body = Http.jsonBody (encodeHat hat)
+            , expect = Rails.expectJsonErrors HandleNewHatResponse errorsDecoder hatDecoder
+            }
 
 -}
-expectJsonErrors : (RailsError error success -> msg) -> Decoder error -> Decoder success -> Expect msg
+expectJsonErrors : (RailsResponse error success -> msg) -> Decoder error -> Decoder success -> Expect msg
 expectJsonErrors toMsg errorDecoder successDecoder =
     let
-        {- We want to eventually return a `RailsError` to reduce the level of
+        {- We want to eventually return a `RailsResponse` to reduce the level of
            unwrapping the caller needs to do, but `expectStringResponse`
            requires us to return a `Result`. We'll just unwrap one level outside
            this function so we don't have to deal with, e.g. `Result Never
-           (RailsError error success)`
+           (RailsResponse error success)`
         -}
-        toResult : Http.Response String -> Result (RailsError error never) success
+        toResult : Http.Response String -> Result (RailsResponse error never) success
         toResult response =
             case response of
                 Http.BadUrl_ url ->
@@ -363,8 +383,8 @@ expectJsonErrors toMsg errorDecoder successDecoder =
                         Err err ->
                             Err (HttpError (Http.BadBody ("Failed to decode result: " ++ Decode.errorToString err)))
 
-        toRailsError : Result (RailsError error success) success -> RailsError error success
-        toRailsError result =
+        toRailsResponse : Result (RailsResponse error success) success -> RailsResponse error success
+        toRailsResponse result =
             case result of
                 Ok success ->
                     Success success
@@ -372,4 +392,4 @@ expectJsonErrors toMsg errorDecoder successDecoder =
                 Err whatever ->
                     whatever
     in
-    ExpectJson <| Http.expectStringResponse (toRailsError >> toMsg) toResult
+    ExpectJson <| Http.expectStringResponse (toRailsResponse >> toMsg) toResult
