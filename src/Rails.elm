@@ -1,29 +1,28 @@
-module Rails exposing (Error, get, post, put, patch, delete, decodeErrors, decodeRawErrors, request)
+module Rails exposing
+    ( get, post, put, patch, delete, request
+    , Expect, Error(..), expectJson, expectJsonErrors
+    )
 
 {-|
 
 
 ## Requests
 
-@docs Error, get, post, put, patch, delete, decodeErrors, decodeRawErrors, request
+@docs get, post, put, patch, delete, request
+
+
+## Expectations
+
+@docs Expect, Error, expectJson, expectJsonErrors
 
 -}
 
-import Http exposing (Body, Expect, Header, Request, Response)
-import Json.Decode exposing (Decoder, decodeString)
-import Result exposing (Result)
+import Http exposing (Body, Header)
+import Json.Decode as Decode exposing (Decoder, decodeString)
 
 
 
--- Http
-
-
-{-| The kinds of errors a Rails server may return.
--}
-type alias Error error =
-    { http : Http.Error
-    , rails : Maybe error
-    }
+-- HTTP
 
 
 {-| Send a GET request to the given URL. Specify how to decode the response.
@@ -39,16 +38,20 @@ type alias Error error =
             |> Http.send HandleGetHatsResponse
 
 -}
-get : String -> Decoder val -> Request val
-get url decoder =
+get :
+    { url : String
+    , expect : Expect msg
+    }
+    -> Cmd msg
+get { url, expect } =
     request
         { method = "GET"
         , headers = []
         , url = url
         , body = Http.emptyBody
-        , expect = Http.expectJson decoder
+        , expect = expect
         , timeout = Nothing
-        , withCredentials = False
+        , tracker = Nothing
         }
 
 
@@ -70,16 +73,21 @@ automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
 to the page, before your `Elm` program gets initialized.
 
 -}
-post : String -> Http.Body -> Decoder val -> Request val
-post url body decoder =
+post :
+    { url : String
+    , body : Body
+    , expect : Expect msg
+    }
+    -> Cmd msg
+post { url, body, expect } =
     request
         { method = "POST"
         , headers = []
         , url = url
         , body = body
-        , expect = Http.expectJson decoder
+        , expect = expect
         , timeout = Nothing
-        , withCredentials = False
+        , tracker = Nothing
         }
 
 
@@ -101,16 +109,21 @@ automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
 to the page, before your `Elm` program gets initialized.
 
 -}
-put : String -> Http.Body -> Decoder val -> Request val
-put url body decoder =
+put :
+    { url : String
+    , body : Body
+    , expect : Expect msg
+    }
+    -> Cmd msg
+put { url, body, expect } =
     request
         { method = "PUT"
         , headers = []
         , url = url
         , body = body
-        , expect = Http.expectJson decoder
+        , expect = expect
         , timeout = Nothing
-        , withCredentials = False
+        , tracker = Nothing
         }
 
 
@@ -132,16 +145,21 @@ automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
 to the page, before your `Elm` program gets initialized.
 
 -}
-patch : String -> Http.Body -> Decoder val -> Request val
-patch url body decoder =
+patch :
+    { url : String
+    , body : Body
+    , expect : Expect msg
+    }
+    -> Cmd msg
+patch { url, body, expect } =
     request
         { method = "PATCH"
         , headers = []
         , url = url
         , body = body
-        , expect = Http.expectJson decoder
+        , expect = expect
         , timeout = Nothing
-        , withCredentials = False
+        , tracker = Nothing
         }
 
 
@@ -163,22 +181,26 @@ automatically, add [`csrf-xhr`](https://www.npmjs.com/package/csrf-xhr)
 to the page, before your `Elm` program gets initialized.
 
 -}
-delete : String -> Http.Body -> Decoder val -> Request val
-delete url body decoder =
+delete :
+    { url : String
+    , body : Body
+    , expect : Expect msg
+    }
+    -> Cmd msg
+delete { url, body, expect } =
     request
         { method = "DELETE"
         , headers = []
         , url = url
         , body = body
-        , expect = Http.expectJson decoder
+        , expect = expect
         , timeout = Nothing
-        , withCredentials = False
+        , tracker = Nothing
         }
 
 
 {-| Wraps `Http.request` while adding the following default headers:
 
-  - `Content-Type` - `"application/json"`
   - `Accept` - `"application/json, text/javascript, */*; q=0.01"`
   - `X-Requested-With` - `"XMLHttpRequest"`
 
@@ -220,27 +242,57 @@ request :
     , headers : List Header
     , url : String
     , body : Body
-    , expect : Expect a
+    , expect : Expect msg
     , timeout : Maybe Float
-    , withCredentials : Bool
+    , tracker : Maybe String
     }
-    -> Request a
-request options =
+    -> Cmd msg
+request { method, headers, url, body, expect, timeout, tracker } =
     let
-        headers =
-            List.concat
-                [ defaultRequestHeaders
-                , options.headers
-                ]
+        accept =
+            case expect of
+                ExpectJson _ ->
+                    Http.header "Accept" "application/json, text/javascript, */*; q=0.01"
+
+        requestedWith =
+            Http.header "X-Requested-With" "XMLHttpRequest"
+
+        unwrappedExpect =
+            case expect of
+                ExpectJson inner ->
+                    inner
     in
-    Http.request { options | headers = headers }
+    Http.request
+        { method = method
+        , headers = accept :: requestedWith :: headers
+        , url = url
+        , body = body
+        , expect = unwrappedExpect
+        , timeout = timeout
+        , tracker = tracker
+        }
 
 
-defaultRequestHeaders : List Header
-defaultRequestHeaders =
-    [ Http.header "Accept" "application/json, text/javascript, */*; q=0.01"
-    , Http.header "X-Requested-With" "XMLHttpRequest"
-    ]
+
+-- EXPECTATIONS
+
+
+type Expect msg
+    = ExpectJson (Http.Expect msg)
+
+
+{-| The kinds of errors a Rails server may return.
+-}
+type Error error
+    = HttpError Http.Error
+    | ErrorWithExplanation Http.Metadata error
+
+
+{-| TODO: docs
+-}
+expectJson : (Result Http.Error msg -> msg) -> Decoder msg -> Expect msg
+expectJson toMsg decoder =
+    ExpectJson <| Http.expectJson toMsg decoder
 
 
 {-| Decode Rails-specific error information from a [`BadStatus`](http://package.elm-lang.org/packages/elm-lang/http/latest/Http#Error)
@@ -273,28 +325,35 @@ like so:
             |> Http.send (getErrors >> HandleResponse)
 
 -}
-decodeErrors : Decoder railsError -> Result Http.Error success -> Result (Error railsError) success
-decodeErrors errorDecoder result =
-    Result.mapError (decodeRawErrors errorDecoder) result
+expectJsonErrors : (Result (Error error) success -> msg) -> Decoder error -> Decoder success -> Expect msg
+expectJsonErrors toMsg errorDecoder successDecoder =
+    let
+        toResult : Http.Response String -> Result (Error error) success
+        toResult response =
+            case response of
+                Http.BadUrl_ url ->
+                    Err (HttpError (Http.BadUrl url))
 
+                Http.Timeout_ ->
+                    Err (HttpError Http.Timeout)
 
-{-| Decode Rails-specific error information from a [`BadStatus`](http://package.elm-lang.org/packages/elm-lang/http/latest/Http#Error)
-response. (That is, a response whose status code is outside the 200 range.)
+                Http.NetworkError_ ->
+                    Err (HttpError Http.NetworkError)
 
-See also, `decodeErrors`.
+                Http.BadStatus_ metadata body ->
+                    case Decode.decodeString errorDecoder body of
+                        Ok decoded ->
+                            Err (ErrorWithExplanation metadata decoded)
 
--}
-decodeRawErrors : Decoder railsError -> Http.Error -> Error railsError
-decodeRawErrors errorDecoder httpError =
-    case httpError of
-        Http.BadStatus { body } ->
-            { http = httpError
-            , rails =
-                Json.Decode.decodeString errorDecoder body
-                    |> Result.toMaybe
-            }
+                        Err err ->
+                            Err (HttpError (Http.BadBody ("Failed to decode error: " ++ Decode.errorToString err)))
 
-        _ ->
-            { http = httpError
-            , rails = Nothing
-            }
+                Http.GoodStatus_ metadata body ->
+                    case Decode.decodeString successDecoder body of
+                        Ok decoded ->
+                            Ok decoded
+
+                        Err err ->
+                            Err (HttpError (Http.BadBody ("Failed to decode result: " ++ Decode.errorToString err)))
+    in
+    ExpectJson <| Http.expectStringResponse toMsg toResult
