@@ -248,24 +248,19 @@ request { method, headers, url, body, expect, timeout, tracker } =
     let
         accept =
             case expect of
-                ExpectJson _ ->
+                Expect JSON _ ->
                     -- q indicates our preference, from 0 to 1. We almost never
                     -- want a fallback, so we indicate that.
                     Http.header "Accept" "application/json, text/javascript, */*; q=0.01"
 
-                ExpectString _ ->
+                Expect Text _ ->
                     Http.header "Accept" "*/*"
 
         requestedWith =
             Http.header "X-Requested-With" "XMLHttpRequest"
 
-        unwrappedExpect =
-            case expect of
-                ExpectJson inner ->
-                    inner
-
-                ExpectString inner ->
-                    inner
+        (Expect _ unwrappedExpect) =
+            expect
     in
     Http.request
         { method = method
@@ -287,8 +282,12 @@ request { method, headers, url, body, expect, timeout, tracker } =
 but wrapped here so we know what headers to set in requests.
 -}
 type Expect msg
-    = ExpectJson (Http.Expect msg)
-    | ExpectString (Http.Expect msg)
+    = Expect ContentType (Http.Expect msg)
+
+
+type ContentType
+    = Text
+    | JSON
 
 
 {-| The kinds of responses a Rails server may return.
@@ -304,7 +303,7 @@ type RailsResponse error success
 -}
 expectString : (Result Http.Error String -> msg) -> Expect msg
 expectString =
-    ExpectString << Http.expectString
+    Expect Text << Http.expectString
 
 
 {-| Expect Rails to return an empty body. Note that we don't actually enforce
@@ -312,14 +311,14 @@ the body is empty; we just discard it. Pairs well with [`delete`](#delete).
 -}
 expectEmptyBody : (Result Http.Error () -> msg) -> Expect msg
 expectEmptyBody toMsg =
-    ExpectString <| Http.expectString (Result.map (\_ -> ()) >> toMsg)
+    Expect Text <| Http.expectString (Result.map (\_ -> ()) >> toMsg)
 
 
 {-| Expect Rails to return JSON.
 -}
 expectJson : (Result Http.Error msg -> msg) -> Decoder msg -> Expect msg
 expectJson toMsg decoder =
-    ExpectJson <| Http.expectJson toMsg decoder
+    Expect JSON <| Http.expectJson toMsg decoder
 
 
 {-| Decode Rails-specific error information from a
@@ -392,4 +391,4 @@ expectJsonErrors toMsg errorDecoder successDecoder =
                 Err whatever ->
                     whatever
     in
-    ExpectJson <| Http.expectStringResponse (toRailsResponse >> toMsg) toResult
+    Expect JSON <| Http.expectStringResponse (toRailsResponse >> toMsg) toResult
