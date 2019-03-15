@@ -321,7 +321,7 @@ expectEmptyBody toMsg =
 
 {-| Expect Rails to return JSON.
 -}
-expectJson : (Result Http.Error msg -> msg) -> Decoder msg -> Expect msg
+expectJson : (Result Http.Error success -> msg) -> Decoder success -> Expect msg
 expectJson toMsg decoder =
     Expect JSON <| Http.expectJson toMsg decoder
 
