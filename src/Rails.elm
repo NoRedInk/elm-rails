@@ -249,8 +249,9 @@ request { method, headers, url, body, expect, timeout, tracker } =
         accept =
             case expect of
                 Expect JSON _ ->
-                    -- q indicates our preference, from 0 to 1. We almost never
-                    -- want a fallback, so we indicate that.
+                    -- q indicates the preference for a content type. In this
+                    -- case it means that we want any content type, only if
+                    -- nothing else is possible.
                     Http.header "Accept" "application/json, text/javascript, */*; q=0.01"
 
                 Expect Text _ ->
