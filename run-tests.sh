@@ -1,11 +1,7 @@
 #!/bin/bash
 
-if [ ! -e node_modules/.bin/elm-test ]; then
-    npm install elm-test
-fi
+echo "Hey, this package doens't currently have automated tests. Oh dear!"
+echo
+echo 'Instead, start `elm reactor` in `integration` and look at the output.'
 
-set -ex
-
-node_modules/.bin/elm-test
-elm-make --yes
-(cd examples; elm-make --yes Main.elm)
+exit 1
