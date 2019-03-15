@@ -1,6 +1,6 @@
 module Rails exposing
     ( get, post, put, patch, delete, request
-    , Expect, Error(..), expectJson, expectJsonErrors
+    , Expect, RailsError(..), expectJson, expectJsonErrors
     )
 
 {-|
@@ -13,7 +13,7 @@ module Rails exposing
 
 ## Expectations
 
-@docs Expect, Error, expectJson, expectJsonErrors
+@docs Expect, RailsError, expectJson, expectJsonErrors
 
 -}
 
@@ -283,9 +283,10 @@ type Expect msg
 
 {-| The kinds of errors a Rails server may return.
 -}
-type Error error
-    = HttpError Http.Error
-    | ErrorWithExplanation Http.Metadata error
+type RailsError error success
+    = Success success
+    | HttpError Http.Error
+    | AppError Http.Metadata error
 
 
 {-| TODO: docs
@@ -325,10 +326,16 @@ like so:
             |> Http.send (getErrors >> HandleResponse)
 
 -}
-expectJsonErrors : (Result (Error error) success -> msg) -> Decoder error -> Decoder success -> Expect msg
+expectJsonErrors : (RailsError error success -> msg) -> Decoder error -> Decoder success -> Expect msg
 expectJsonErrors toMsg errorDecoder successDecoder =
     let
-        toResult : Http.Response String -> Result (Error error) success
+        {- We want to eventually return a `RailsError` to reduce the level of
+           unwrapping the caller needs to do, but `expectStringResponse`
+           requires us to return a `Result`. We'll just unwrap one level outside
+           this function so we don't have to deal with, e.g. `Result Never
+           (RailsError error success)`
+        -}
+        toResult : Http.Response String -> Result (RailsError error never) success
         toResult response =
             case response of
                 Http.BadUrl_ url ->
@@ -343,7 +350,7 @@ expectJsonErrors toMsg errorDecoder successDecoder =
                 Http.BadStatus_ metadata body ->
                     case Decode.decodeString errorDecoder body of
                         Ok decoded ->
-                            Err (ErrorWithExplanation metadata decoded)
+                            Err (AppError metadata decoded)
 
                         Err err ->
                             Err (HttpError (Http.BadBody ("Failed to decode error: " ++ Decode.errorToString err)))
@@ -355,5 +362,14 @@ expectJsonErrors toMsg errorDecoder successDecoder =
 
                         Err err ->
                             Err (HttpError (Http.BadBody ("Failed to decode result: " ++ Decode.errorToString err)))
+
+        toRailsError : Result (RailsError error success) success -> RailsError error success
+        toRailsError result =
+            case result of
+                Ok success ->
+                    Success success
+
+                Err whatever ->
+                    whatever
     in
-    ExpectJson <| Http.expectStringResponse toMsg toResult
+    ExpectJson <| Http.expectStringResponse (toRailsError >> toMsg) toResult
