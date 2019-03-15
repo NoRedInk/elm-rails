@@ -282,7 +282,11 @@ request { method, headers, url, body, expect, timeout, tracker } =
 [`Http.Expect`](https://package.elm-lang.org/packages/elm/http/2.0.0/Http#Expect),
 but wrapped here so we know what headers to set in requests.
 -}
-type Expect msg
+type
+    Expect msg
+    -- while these can technically contain any `Expect`, we track what content
+    -- type we want using the public constructors. That's why this is an opaque
+    -- type!
     = Expect ContentType (Http.Expect msg)
 
 
