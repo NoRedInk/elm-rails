@@ -372,12 +372,17 @@ expectJsonErrors toMsg errorDecoder successDecoder =
                     Err (HttpError Http.NetworkError)
 
                 Http.BadStatus_ metadata body ->
-                    case Decode.decodeString errorDecoder body of
-                        Ok decoded ->
-                            Err (AppError metadata decoded)
+                    if metadata.statusCode == 401 then
+                        -- Unauthorized
+                        Err (HttpError (Http.BadStatus metadata.statusCode))
 
-                        Err err ->
-                            Err (HttpError (Http.BadBody ("Failed to decode error: " ++ Decode.errorToString err)))
+                    else
+                        case Decode.decodeString errorDecoder body of
+                            Ok decoded ->
+                                Err (AppError metadata decoded)
+
+                            Err err ->
+                                Err (HttpError (Http.BadBody ("Status: " ++ String.fromInt metadata.statusCode ++ ". Failed to decode error: " ++ Decode.errorToString err)))
 
                 Http.GoodStatus_ metadata body ->
                     case Decode.decodeString successDecoder body of
