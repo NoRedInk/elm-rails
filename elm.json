@@ -3,7 +3,7 @@
     "name": "NoRedInk/elm-rails",
     "summary": "Convenience functions for using Elm with Rails.",
     "license": "BSD-3-Clause",
-    "version": "9.0.0",
+    "version": "9.0.1",
     "exposed-modules": [
         "Rails",
         "Rails.Decode"
