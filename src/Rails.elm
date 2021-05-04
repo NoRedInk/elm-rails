@@ -211,7 +211,7 @@ delete { url, body, expect } =
   - `X-Requested-With` - `"XMLHttpRequest"`
 
 You can specify additional headers in the `headers` field of the configuration record.
-The `delete` example above would look lik this:
+The `delete` example above would look like this:
 
     import Http
     import Rails
