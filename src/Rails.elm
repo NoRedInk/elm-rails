@@ -1,6 +1,7 @@
 module Rails exposing
     ( get, post, put, patch, delete, request
     , Expect, Response(..), expectString, expectEmptyBody, expectJson, expectJsonErrors
+    , response
     )
 
 {-|
@@ -18,7 +19,7 @@ module Rails exposing
 -}
 
 import Http exposing (Body, Header)
-import Json.Decode as Decode exposing (Decoder, decodeString)
+import Json.Decode as Decode exposing (Decoder)
 
 
 
@@ -303,6 +304,31 @@ type Response error success
     | AppError Http.Metadata error
 
 
+{-| Return a Rails.Response from an Http.Response by
+
+  - mapping all Http errors to the Rails.Response.HttpError constructor
+  - using the given function to transform (GoodStatus metadata body) to the appropriate Response.
+
+-}
+response : (Http.Metadata -> body -> Response error success) -> Http.Response body -> Response error success
+response fromGoodStatus httpResponse =
+    case httpResponse of
+        Http.BadUrl_ url_ ->
+            HttpError (Http.BadUrl url_)
+
+        Http.Timeout_ ->
+            HttpError Http.Timeout
+
+        Http.NetworkError_ ->
+            HttpError Http.NetworkError
+
+        Http.BadStatus_ metadata _ ->
+            HttpError (Http.BadStatus metadata.statusCode)
+
+        Http.GoodStatus_ metadata body ->
+            fromGoodStatus metadata body
+
+
 {-| Expect Rails to return some string data. If this will be JSON, use
 [`expectJson`](#expectJson) instead!
 -}
@@ -360,8 +386,8 @@ expectJsonErrors toMsg errorDecoder successDecoder =
            (Response error success)`
         -}
         toResult : Http.Response String -> Result (Response error never) success
-        toResult response =
-            case response of
+        toResult resp =
+            case resp of
                 Http.BadUrl_ url ->
                     Err (HttpError (Http.BadUrl url))
 
@@ -384,7 +410,7 @@ expectJsonErrors toMsg errorDecoder successDecoder =
                             Err err ->
                                 Err (HttpError (Http.BadBody ("Status: " ++ String.fromInt metadata.statusCode ++ ". Failed to decode error: " ++ Decode.errorToString err)))
 
-                Http.GoodStatus_ metadata body ->
+                Http.GoodStatus_ _ body ->
                     case Decode.decodeString successDecoder body of
                         Ok decoded ->
                             Ok decoded
